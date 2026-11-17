@@ -22,6 +22,16 @@ export const Route = createFileRoute("/")({
 import type { Album, Track, Cell } from "@/lib/chart-types";
 import { createChart, saveChart } from "@/lib/charts.functions";
 const SHARE = "crate-share-v1";
+const PUBLIC_ORIGIN = "https://crate-album-charts.lovable.app";
+/**
+ * Share links must point at the public site: Lovable's editor preview (id-preview--…) is login-gated and
+ * localhost only works on this machine. A custom domain or the published site keeps its own origin.
+ */
+const shareOrigin = () => {
+  const h = window.location.hostname;
+  const isPreview = h.startsWith("id-preview--") || h.endsWith(".lovableproject.com") || h === "localhost" || h === "127.0.0.1";
+  return isPreview ? PUBLIC_ORIGIN : window.location.origin;
+};
 
 const STORE = "crate-chart-v1";
 const big = (u: string) => u.replace("100x100bb", "600x600bb");
@@ -84,7 +94,7 @@ function Index() {
       info = await createChart({ data: { data } });
       localStorage.setItem(SHARE, JSON.stringify(info)); setShareInfo(info);
     } else await saveChart({ data: { ...info, data } });
-    const url = `${window.location.origin}/c/${info.id}`;
+    const url = `${shareOrigin()}/c/${info.id}`;
     if (navigator.share) { try { await navigator.share({ title, url }); return; } catch {} }
     await navigator.clipboard.writeText(url);
     setCopied(true); setTimeout(() => setCopied(false), 2000);
