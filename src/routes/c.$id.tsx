@@ -1,9 +1,9 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
 import { Disc3, Play, Pause, Plus } from "lucide-react";
 import { getChart } from "@/lib/charts.functions";
 import type { ChartData } from "@/lib/chart-types";
+import { usePlayer } from "@/lib/use-player";
 
 const chartQuery = (id: string) =>
   queryOptions({ queryKey: ["chart", id], queryFn: () => getChart({ data: { id } }) as Promise<ChartData | null>, refetchInterval: 15000 });
@@ -31,24 +31,14 @@ export const Route = createFileRoute("/c/$id")({
 function SharedChart() {
   const { id } = Route.useParams();
   const { data } = useSuspenseQuery(chartQuery(id));
-  const [playing, setPlaying] = useState<number | null>(null);
-  const audio = useRef<HTMLAudioElement | null>(null);
-  useEffect(() => {
-    audio.current = new Audio();
-    audio.current.onended = () => setPlaying(null);
-    return () => audio.current?.pause();
-  }, []);
+  const player = usePlayer();
   if (!data) return null;
   const cells = data.cells.slice(0, data.cols * data.rows);
   const filled = cells.map((c, i) => ({ c, i })).filter((x) => x.c);
+  const playing = player.playing === null ? null : Number(player.playing);
   const play = (i: number) => {
-    const c = cells[i]; const a = audio.current;
-    if (!c?.track || !a) return;
-    if (playing === i) { a.pause(); setPlaying(null); return; }
-    a.src = c.track.preview;
-    const start = c.track.start;
-    a.onloadedmetadata = () => { a.currentTime = start; };
-    a.play().catch(() => {}); setPlaying(i);
+    const c = cells[i];
+    if (c?.track) player.play(String(i), c.track);
   };
 
   return (
@@ -99,6 +89,7 @@ function SharedChart() {
           </ol>
         )}
       </main>
+      {player.ui}
     </div>
   );
 }

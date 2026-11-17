@@ -1,7 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { Search, Music2, Play, Pause, X, Disc3, Share2, Check } from "lucide-react";
+import { Search, Music2, Play, Pause, X, Disc3, Share2, Check, Youtube, ExternalLink, Crosshair, Link2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { usePlayer } from "@/lib/use-player";
+import { searchYouTube, youTubeInfo, parseYouTube, fmt, unfmt, type YtVideo } from "@/lib/youtube.functions";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -37,8 +39,8 @@ function Index() {
   const [results, setResults] = useState<Album[]>([]);
   const [searching, setSearching] = useState(false);
   const [picker, setPicker] = useState<number | null>(null);
-  const [playing, setPlaying] = useState<string | null>(null);
-  const audio = useRef<HTMLAudioElement | null>(null);
+  const player = usePlayer();
+  const { playing, play, stop } = player;
   const drag = useRef<number | null>(null);
 
   useEffect(() => {
@@ -48,9 +50,6 @@ function Index() {
       if (d) { setTitle(d.title); setCols(d.cols); setRows(d.rows); setCells([...d.cells, ...Array(100).fill(null)].slice(0, 100)); setShowNames(d.showNames ?? true); }
     } catch {}
     setLoaded(true);
-    audio.current = new Audio();
-    audio.current.onended = () => setPlaying(null);
-    return () => audio.current?.pause();
   }, []);
   useEffect(() => {
     if (loaded) localStorage.setItem(STORE, JSON.stringify({ title, cols, rows, cells, showNames }));
@@ -77,14 +76,6 @@ function Index() {
     return () => clearTimeout(t);
   }, [q]);
 
-  const play = (key: string, url: string, start = 0) => {
-    const a = audio.current!;
-    if (playing === key) { a.pause(); setPlaying(null); return; }
-    a.src = url;
-    a.onloadedmetadata = () => { a.currentTime = start; };
-    a.play().catch(() => {});
-    setPlaying(key);
-  };
   const [copied, setCopied] = useState(false);
   const share = async () => {
     const data = { title, cols, rows, showNames, cells: cells.slice(0, total) };
@@ -98,7 +89,6 @@ function Index() {
     await navigator.clipboard.writeText(url);
     setCopied(true); setTimeout(() => setCopied(false), 2000);
   };
-  const stop = () => { audio.current?.pause(); setPlaying(null); };
 
   const total = cols * rows;
   const place = (album: Album) => {
@@ -183,7 +173,7 @@ function Index() {
                   <div key={i} draggable={!!c}
                     onDragStart={() => (drag.current = i)} onDragOver={(e) => e.preventDefault()}
                     onDrop={() => { if (drag.current !== null) swap(drag.current, i); drag.current = null; }}
-                    onClick={() => (c ? (c.track ? play(key, c.track.preview, c.track.start) : setPicker(i)) : setSelected(i))}
+                    onClick={() => (c ? (c.track ? play(key, c.track) : setPicker(i)) : setSelected(i))}
                     className={`group relative aspect-square cursor-pointer overflow-hidden rounded-md transition ${c ? "" : "border border-dashed"} ${selected === i && !c ? "border-primary bg-accent" : "border-border bg-muted/40 hover:bg-muted"}`}>
                     {c ? (
                       <>
@@ -221,7 +211,7 @@ function Index() {
                     <span className="w-6 text-right font-display text-lg leading-5 text-primary">{i + 1}</span>
                     <span className="min-w-0">
                       <span className="font-medium">{c!.album.artist}</span> <span className="text-muted-foreground">— {c!.album.name}</span>
-                      {c!.track && <span className="block truncate text-xs text-muted-foreground">♪ {c!.track.name}</span>}
+                      {c!.track && <span className="flex items-center gap-1 truncate text-xs text-muted-foreground">{c!.track.yt ? <Youtube className="h-3 w-3 shrink-0" /> : "♪"} {c!.track.name}</span>}
                       {c!.note && <span className="mt-0.5 block text-xs italic text-foreground/80">“{c!.note}”</span>}
                     </span>
                   </li>
@@ -232,75 +222,213 @@ function Index() {
         </section>
       </main>
 
-      <SongPicker idx={picker} cell={picker !== null ? (cells[picker] ?? null) : null} playing={playing} play={play} stop={stop}
+      <SongPicker idx={picker} cell={picker !== null ? (cells[picker] ?? null) : null} player={player}
         onClose={() => { stop(); setPicker(null); }}
         onPick={(t, note) => { if (picker !== null && cells[picker]) update(picker, { ...cells[picker]!, track: t ?? cells[picker]!.track, note }); stop(); setPicker(null); }} />
+      {player.ui}
     </div>
   );
 }
 
-function SongPicker({ idx, cell, onClose, onPick, playing, play, stop }: {
+type ListTrack = { id: number; name: string; preview?: string | undefined };
+
+function SongPicker({ idx, cell, onClose, onPick, player }: {
   idx: number | null; cell: Cell; onClose: () => void; onPick: (t: Track | undefined, note: string) => void;
-  playing: string | null; play: (k: string, u: string, s?: number) => void; stop: () => void;
+  player: ReturnType<typeof usePlayer>;
 }) {
-  const [tracks, setTracks] = useState<Omit<Track, "start">[]>([]);
-  const [chosen, setChosen] = useState<number | null>(null);
+  const { playing, play, stop } = player;
+  const [tracks, setTracks] = useState<ListTrack[] | null>(null);
+  const [chosen, setChosen] = useState<ListTrack | null>(null);
+  const [video, setVideo] = useState<YtVideo | null>(null);
+  const [results, setResults] = useState<YtVideo[]>([]);
+  const [ytEnabled, setYtEnabled] = useState<boolean | null>(null);
+  const [ytLoading, setYtLoading] = useState(false);
+  const [link, setLink] = useState("");
+  const [linkError, setLinkError] = useState<string | null>(null);
   const [start, setStart] = useState(0);
+  const [startText, setStartText] = useState("0:00");
+  const [duration, setDuration] = useState<number | null>(null);
   const [note, setNote] = useState("");
+  const open = idx !== null && !!cell;
+
+  const setStartAt = (s: number) => { s = Math.max(0, Math.floor(s)); setStart(s); setStartText(fmt(s)); };
+
   useEffect(() => {
     if (!cell) return;
-    setTracks([]); setChosen(cell.track?.id ?? null); setStart(cell.track?.start ?? 0); setNote(cell.note ?? "");
+    const t = cell.track;
+    setTracks(null); setResults([]); setLink(""); setLinkError(null); setNote(cell.note ?? "");
+    setChosen(t && typeof t.id === "number" ? { id: t.id, name: t.name, preview: t.preview } : null);
+    setVideo(t?.yt ? { id: t.yt, title: t.name, channel: "", thumb: `https://i.ytimg.com/vi/${t.yt}/mqdefault.jpg` } : null);
+    setDuration(null); setStartAt(t?.start ?? 0);
     fetch(`https://itunes.apple.com/lookup?id=${cell.album.id}&entity=song`).then((r) => r.json()).then((j) =>
-      setTracks(j.results.filter((t: any) => t.wrapperType === "track" && t.previewUrl).map((t: any) => ({ id: t.trackId, name: t.trackName, preview: t.previewUrl }))),
-    ).catch(() => {});
+      setTracks(j.results.filter((x: any) => x.wrapperType === "track").map((x: any) => ({ id: x.trackId, name: x.trackName, preview: x.previewUrl }))),
+    ).catch(() => setTracks([]));
   }, [idx, cell?.album.id]);
-  const sel = tracks.find((t) => t.id === chosen);
+
+  const findOnYouTube = async (song: ListTrack) => {
+    if (!cell || ytEnabled === false) return;
+    setYtLoading(true);
+    try {
+      const r = await searchYouTube({ data: { q: `${cell.album.artist} ${song.name}` } });
+      setYtEnabled(r.enabled); setResults(r.videos);
+    } catch { setResults([]); }
+    setYtLoading(false);
+  };
+
+  const chooseSong = (t: ListTrack) => {
+    setChosen(t); setVideo(null); setDuration(null); setStartAt(0);
+    findOnYouTube(t);
+  };
+
+  const chooseVideo = (v: YtVideo, at = 0) => {
+    stop(); setVideo(v); setDuration(v.duration ?? null); setStartAt(at);
+  };
+
+  const applyLink = async () => {
+    const p = parseYouTube(link);
+    if (!p) { setLinkError("That doesn't look like a YouTube link."); return; }
+    setLinkError(null);
+    const info = await youTubeInfo({ data: { id: p.id } }).catch(() => null);
+    chooseVideo(info ?? { id: p.id, title: chosen?.name ?? "YouTube video", channel: "", thumb: `https://i.ytimg.com/vi/${p.id}/mqdefault.jpg` }, p.start ?? 0);
+    setLink("");
+  };
+
+  // While previewing a YouTube video, learn its length so the slider covers the whole song.
+  const previewKey = video ? `try-yt-${video.id}` : null;
+  useEffect(() => {
+    if (!previewKey || playing !== previewKey || duration) return;
+    const t = setInterval(() => { const d = player.duration(); if (d) { setDuration(Math.floor(d)); clearInterval(t); } }, 500);
+    return () => clearInterval(t);
+  }, [playing, previewKey, duration]);
+
+  const max = video ? Math.max(duration ?? 600, start) : 25;
+  const name = chosen?.name ?? video?.title ?? "";
+  const canSave = !!(video || chosen?.preview);
+  const save = () => {
+    if (!canSave) return onPick(undefined, note.trim());
+    onPick({ id: chosen?.id ?? video!.id, name, preview: chosen?.preview, start: video ? start : Math.min(start, 25), yt: video?.id }, note.trim());
+  };
+  const ytSearchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(`${cell?.album.artist ?? ""} ${chosen?.name ?? cell?.album.name ?? ""}`)}`;
+
   return (
-    <Dialog open={idx !== null && !!cell} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg">
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()} modal={false}>
+      {open && <div className="fixed inset-0 z-40 bg-black/80" aria-hidden />}
+      <DialogContent className="max-h-[90vh] max-w-xl overflow-y-auto"
+        onInteractOutside={(e) => { if ((e.target as HTMLElement | null)?.closest?.("[data-mini-player]")) e.preventDefault(); }}>
         {cell && (
           <>
             <DialogHeader>
               <div className="flex items-center gap-4">
                 <img src={cell.album.art} alt="" className="h-16 w-16 rounded-md" />
-                <div>
+                <div className="min-w-0">
                   <DialogTitle className="font-display text-2xl font-normal">{cell.album.name}</DialogTitle>
                   <p className="text-sm text-muted-foreground">{cell.album.artist} · hook a song to this album</p>
                 </div>
               </div>
             </DialogHeader>
-            <ul className="max-h-72 space-y-1 overflow-y-auto">
-              {tracks.length === 0 && <li className="text-sm text-muted-foreground">Loading songs…</li>}
-              {tracks.map((t, n) => (
-                <li key={t.id} onClick={() => { setChosen(t.id); setStart(0); }}
-                  className={`flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-sm ${chosen === t.id ? "bg-accent" : "hover:bg-muted"}`}>
-                  <span className="w-5 text-muted-foreground">{n + 1}</span>
-                  <span className="flex-1 truncate">{t.name}</span>
-                  <button onClick={(e) => { e.stopPropagation(); play(`pick-${t.id}`, t.preview); }} className="rounded-full p-1.5 hover:text-primary">
-                    {playing === `pick-${t.id}` ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+
+            <section>
+              <h3 className="mb-2 text-xs uppercase tracking-widest text-muted-foreground">1 · Pick the song</h3>
+              <ul className="max-h-56 space-y-1 overflow-y-auto">
+                {tracks === null && <li className="text-sm text-muted-foreground">Loading songs…</li>}
+                {tracks?.length === 0 && <li className="text-sm text-muted-foreground">No song list for this album. Paste a YouTube link below.</li>}
+                {tracks?.map((t, n) => (
+                  <li key={t.id} onClick={() => chooseSong(t)}
+                    className={`flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-sm ${chosen?.id === t.id ? "bg-accent" : "hover:bg-muted"}`}>
+                    <span className="w-5 text-muted-foreground">{n + 1}</span>
+                    <span className="flex-1 truncate">{t.name}</span>
+                    {t.preview && (
+                      <button onClick={(e) => { e.stopPropagation(); play(`pick-${t.id}`, { name: t.name, preview: t.preview, start: 0 }); }}
+                        className="rounded-full p-1.5 hover:text-primary" title="Quick listen (30s Apple preview)">
+                        {playing === `pick-${t.id}` ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </section>
+
+            <section className="space-y-3 border-t border-border pt-4">
+              <h3 className="flex items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground"><Youtube className="h-4 w-4" />2 · Play it from YouTube</h3>
+              {video ? (
+                <div className="flex items-center gap-3 rounded-lg bg-accent p-2">
+                  <img src={video.thumb} alt="" className="h-12 w-20 rounded object-cover" />
+                  <div className="min-w-0 flex-1 text-sm">
+                    <p className="truncate">{video.title}</p>
+                    {video.channel && <p className="truncate text-xs text-muted-foreground">{video.channel}</p>}
+                  </div>
+                  <button onClick={() => { stop(); setVideo(null); setDuration(null); setStartAt(0); }} className="rounded-full p-1.5 hover:text-destructive" title="Remove video"><X className="h-4 w-4" /></button>
+                </div>
+              ) : (
+                <>
+                  {ytLoading && <p className="text-sm text-muted-foreground">Finding it on YouTube…</p>}
+                  {!ytLoading && results.length > 0 && (
+                    <ul className="space-y-1">
+                      {results.map((v) => (
+                        <li key={v.id}>
+                          <button onClick={() => chooseVideo(v)} className="flex w-full items-center gap-3 rounded-lg p-1.5 text-left text-sm hover:bg-muted">
+                            <img src={v.thumb} alt="" className="h-10 w-16 shrink-0 rounded object-cover" loading="lazy" />
+                            <span className="min-w-0 flex-1"><span className="line-clamp-1">{v.title}</span><span className="block truncate text-xs text-muted-foreground">{v.channel}{v.duration ? ` · ${fmt(v.duration)}` : ""}</span></span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {!chosen && ytEnabled !== false && results.length === 0 && !ytLoading && <p className="text-xs text-muted-foreground">Pick a song above to find it on YouTube, or paste a link.</p>}
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <Link2 className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                      <input value={link} onChange={(e) => setLink(e.target.value)} onKeyDown={(e) => e.key === "Enter" && applyLink()} placeholder="Paste a YouTube link…"
+                        className="w-full rounded-lg border border-input bg-background py-2 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-ring" />
+                    </div>
+                    <button onClick={applyLink} disabled={!link.trim()} className="rounded-lg border border-border px-3 text-sm hover:bg-muted disabled:opacity-40">Use</button>
+                  </div>
+                  {linkError && <p className="text-xs text-destructive">{linkError}</p>}
+                  <a href={ytSearchUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+                    Search YouTube in a new tab <ExternalLink className="h-3 w-3" />
+                  </a>
+                </>
+              )}
+            </section>
+
+            {(video || chosen?.preview) && (
+              <section className="space-y-3 border-t border-border pt-4">
+                <label className="block text-sm">
+                  <span className="flex items-center justify-between text-xs uppercase tracking-widest text-muted-foreground">
+                    <span>Start the clip at</span>
+                    <input value={startText} onChange={(e) => setStartText(e.target.value)}
+                      onBlur={() => { const v = unfmt(startText); if (v === null) setStartText(fmt(start)); else setStartAt(Math.min(v, max)); }}
+                      onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+                      className="w-20 rounded border border-input bg-background px-2 py-0.5 text-right text-sm normal-case tracking-normal text-foreground outline-none focus:ring-2 focus:ring-ring" />
+                  </span>
+                  <input type="range" min={0} max={max} value={start} onChange={(e) => setStartAt(+e.target.value)} className="mt-2 w-full accent-primary" />
+                  {!video && <span className="text-xs text-muted-foreground">Apple preview only (30s clip). Add a YouTube video for the full song.</span>}
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  <button onClick={() => { const key = video ? previewKey! : `try-${chosen!.id}`; if (playing === key) stop(); else play(key, { name, preview: chosen?.preview, start, yt: video?.id }); }}
+                    className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-border px-4 py-2 text-sm hover:bg-muted">
+                    {playing === (video ? previewKey : `try-${chosen?.id}`) ? <><Pause className="h-4 w-4" />Stop</> : <><Play className="h-4 w-4" />Preview from {fmt(start)}</>}
                   </button>
-                </li>
-              ))}
-            </ul>
-            <div className="space-y-3 border-t border-border pt-4">
+                  {video && playing === previewKey && (
+                    <button onClick={() => { const p = player.position(); if (p !== null) setStartAt(p); }}
+                      className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-border px-4 py-2 text-sm hover:bg-muted" title="Scrub in the player, then set the start to where it is now">
+                      <Crosshair className="h-4 w-4" />Start from here
+                    </button>
+                  )}
+                </div>
+              </section>
+            )}
+
+            <section className="space-y-3 border-t border-border pt-4">
               <label className="block text-sm">
                 <span className="text-xs uppercase tracking-widest text-muted-foreground">Why this pick?</span>
                 <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={280} rows={2} placeholder="A few words about this album…"
                   className="mt-2 w-full resize-none rounded-lg border border-input bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring" />
               </label>
-            {sel && (
-              <>
-                <label className="block text-sm">
-                  <span className="flex justify-between text-xs uppercase tracking-widest text-muted-foreground"><span>Excerpt starts at</span><span className="text-foreground">0:{String(start).padStart(2, "0")}</span></span>
-                  <input type="range" min={0} max={25} value={start} onChange={(e) => setStart(+e.target.value)} className="mt-2 w-full accent-primary" />
-                </label>
-                <div className="flex gap-2">
-                  <button onClick={() => { stop(); play(`try-${sel.id}-${start}`, sel.preview, start); }} className="flex-1 rounded-lg border border-border px-4 py-2 text-sm hover:bg-muted">Preview excerpt</button>
-                </div>
-              </>
-            )}
-              <button onClick={() => onPick(sel ? { ...sel, start } : undefined, note.trim())} className="w-full rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">Save</button>
-            </div>
+              <button onClick={save} className="w-full rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
+                {canSave ? `Save${video ? " · YouTube" : " · Apple preview"} from ${fmt(video ? start : Math.min(start, 25))}` : "Save"}
+              </button>
+            </section>
           </>
         )}
       </DialogContent>
