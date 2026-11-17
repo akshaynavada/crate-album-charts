@@ -112,7 +112,7 @@ function Index() {
                 className="w-full rounded-lg border border-input bg-background py-2.5 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-ring" />
             </div>
             <p className="mt-2 text-xs text-muted-foreground">Click a cell, then pick an album. Drag cells to reorder.</p>
-            <div className="mt-4 grid max-h-[46vh] grid-cols-3 gap-2 overflow-y-auto pr-1">
+            <div className="mt-4 grid max-h-56 lg:max-h-[46vh] grid-cols-4 lg:grid-cols-3 gap-2 overflow-y-auto pr-1">
               {searching && <p className="col-span-3 text-sm text-muted-foreground">Searching…</p>}
               {results.map((a) => (
                 <button key={a.id} onClick={() => place(a)} title={`${a.name} — ${a.artist}`}
