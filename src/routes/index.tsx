@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { Search, Music2, Play, Pause, X, Disc3 } from "lucide-react";
+import { Search, Music2, Play, Pause, X, Disc3, Share2, Check } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/")({
@@ -19,7 +19,7 @@ export const Route = createFileRoute("/")({
 
 type Album = { id: number; name: string; artist: string; art: string };
 type Track = { id: number; name: string; preview: string; start: number };
-type Cell = { album: Album; track?: Track } | null;
+type Cell = { album: Album; track?: Track | undefined; note?: string } | null;
 
 const STORE = "crate-chart-v1";
 const big = (u: string) => u.replace("100x100bb", "600x600bb");
@@ -42,8 +42,10 @@ function Index() {
 
   useEffect(() => {
     try {
-      const d = JSON.parse(localStorage.getItem(STORE) || "null");
-      if (d) { setTitle(d.title); setCols(d.cols); setRows(d.rows); setCells(d.cells); setShowNames(d.showNames ?? true); }
+      const h = window.location.hash.startsWith("#c=") ? window.location.hash.slice(3) : "";
+      const d = h ? JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(h))))) : JSON.parse(localStorage.getItem(STORE) || "null");
+      if (h) history.replaceState(null, "", window.location.pathname);
+      if (d) { setTitle(d.title); setCols(d.cols); setRows(d.rows); setCells([...d.cells, ...Array(100).fill(null)].slice(0, 100)); setShowNames(d.showNames ?? true); }
     } catch {}
     setLoaded(true);
     audio.current = new Audio();
@@ -75,6 +77,14 @@ function Index() {
     a.onloadedmetadata = () => { a.currentTime = start; };
     a.play().catch(() => {});
     setPlaying(key);
+  };
+  const [copied, setCopied] = useState(false);
+  const share = async () => {
+    const data = { title, cols, rows, showNames, cells: cells.slice(0, total) };
+    const url = `${window.location.origin}/#c=${encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(data)))))}`;
+    if (navigator.share) { try { await navigator.share({ title, url }); return; } catch {} }
+    await navigator.clipboard.writeText(url);
+    setCopied(true); setTimeout(() => setCopied(false), 2000);
   };
   const stop = () => { audio.current?.pause(); setPlaying(null); };
 
@@ -146,7 +156,12 @@ function Index() {
         </aside>
 
         <section className="rounded-3xl border border-border bg-card/60 p-6 shadow-record md:p-8">
-          <h1 className="mb-6 font-display text-5xl leading-none md:text-6xl">{title}</h1>
+          <div className="mb-6 flex items-start justify-between gap-4">
+            <h1 className="font-display text-5xl leading-none md:text-6xl">{title}</h1>
+            <button onClick={share} className="flex shrink-0 items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
+              {copied ? <Check className="h-4 w-4" /> : <Share2 className="h-4 w-4" />}{copied ? "Link copied" : "Share"}
+            </button>
+          </div>
           <div className="flex flex-col gap-8 xl:flex-row">
             <div className="grid flex-1 gap-2" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0,1fr))` }}>
               {cells.slice(0, total).map((c, i) => {
@@ -163,7 +178,7 @@ function Index() {
                         <img src={c.album.art} alt={c.album.name} className={`h-full w-full object-cover transition ${isPlaying ? "scale-105" : ""}`} />
                         <div className={`absolute inset-0 flex flex-col justify-between bg-background/70 p-2 transition ${isPlaying ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}>
                           <div className="flex justify-end gap-1">
-                            <button onClick={(e) => { e.stopPropagation(); setPicker(i); }} className="rounded-full bg-card p-1.5 hover:text-primary" title="Choose song"><Music2 className="h-3.5 w-3.5" /></button>
+                            <button onClick={(e) => { e.stopPropagation(); setPicker(i); }} className="rounded-full bg-card p-1.5 hover:text-primary" title="Song & description"><Music2 className="h-3.5 w-3.5" /></button>
                             <button onClick={(e) => { e.stopPropagation(); if (isPlaying) stop(); update(i, null); }} className="rounded-full bg-card p-1.5 hover:text-destructive" title="Remove"><X className="h-3.5 w-3.5" /></button>
                           </div>
                           <div className="flex items-end gap-2">
@@ -194,7 +209,8 @@ function Index() {
                     <span className="w-6 text-right font-display text-lg leading-5 text-primary">{i + 1}</span>
                     <span className="min-w-0">
                       <span className="font-medium">{c!.album.artist}</span> <span className="text-muted-foreground">— {c!.album.name}</span>
-                      {c!.track && <span className="block truncate text-xs text-primary/80">♪ {c!.track.name}</span>}
+                      {c!.track && <span className="block truncate text-xs text-muted-foreground">♪ {c!.track.name}</span>}
+                      {c!.note && <span className="mt-0.5 block text-xs italic text-foreground/80">“{c!.note}”</span>}
                     </span>
                   </li>
                 ))}
@@ -206,21 +222,22 @@ function Index() {
 
       <SongPicker idx={picker} cell={picker !== null ? (cells[picker] ?? null) : null} playing={playing} play={play} stop={stop}
         onClose={() => { stop(); setPicker(null); }}
-        onPick={(t) => { if (picker !== null && cells[picker]) update(picker, { ...cells[picker]!, track: t }); stop(); setPicker(null); }} />
+        onPick={(t, note) => { if (picker !== null && cells[picker]) update(picker, { ...cells[picker]!, track: t ?? cells[picker]!.track, note }); stop(); setPicker(null); }} />
     </div>
   );
 }
 
 function SongPicker({ idx, cell, onClose, onPick, playing, play, stop }: {
-  idx: number | null; cell: Cell; onClose: () => void; onPick: (t: Track) => void;
+  idx: number | null; cell: Cell; onClose: () => void; onPick: (t: Track | undefined, note: string) => void;
   playing: string | null; play: (k: string, u: string, s?: number) => void; stop: () => void;
 }) {
   const [tracks, setTracks] = useState<Omit<Track, "start">[]>([]);
   const [chosen, setChosen] = useState<number | null>(null);
   const [start, setStart] = useState(0);
+  const [note, setNote] = useState("");
   useEffect(() => {
     if (!cell) return;
-    setTracks([]); setChosen(cell.track?.id ?? null); setStart(cell.track?.start ?? 0);
+    setTracks([]); setChosen(cell.track?.id ?? null); setStart(cell.track?.start ?? 0); setNote(cell.note ?? "");
     fetch(`https://itunes.apple.com/lookup?id=${cell.album.id}&entity=song`).then((r) => r.json()).then((j) =>
       setTracks(j.results.filter((t: any) => t.wrapperType === "track" && t.previewUrl).map((t: any) => ({ id: t.trackId, name: t.trackName, preview: t.previewUrl }))),
     ).catch(() => {});
@@ -253,18 +270,25 @@ function SongPicker({ idx, cell, onClose, onPick, playing, play, stop }: {
                 </li>
               ))}
             </ul>
+            <div className="space-y-3 border-t border-border pt-4">
+              <label className="block text-sm">
+                <span className="text-xs uppercase tracking-widest text-muted-foreground">Why this pick?</span>
+                <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={280} rows={2} placeholder="A few words about this album…"
+                  className="mt-2 w-full resize-none rounded-lg border border-input bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring" />
+              </label>
             {sel && (
-              <div className="space-y-3 border-t border-border pt-4">
+              <>
                 <label className="block text-sm">
                   <span className="flex justify-between text-xs uppercase tracking-widest text-muted-foreground"><span>Excerpt starts at</span><span className="text-foreground">0:{String(start).padStart(2, "0")}</span></span>
                   <input type="range" min={0} max={25} value={start} onChange={(e) => setStart(+e.target.value)} className="mt-2 w-full accent-primary" />
                 </label>
                 <div className="flex gap-2">
                   <button onClick={() => { stop(); play(`try-${sel.id}-${start}`, sel.preview, start); }} className="flex-1 rounded-lg border border-border px-4 py-2 text-sm hover:bg-muted">Preview excerpt</button>
-                  <button onClick={() => onPick({ ...sel, start })} className="flex-1 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">Hook this song</button>
                 </div>
-              </div>
+              </>
             )}
+              <button onClick={() => onPick(sel ? { ...sel, start } : undefined, note.trim())} className="w-full rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">Save</button>
+            </div>
           </>
         )}
       </DialogContent>
