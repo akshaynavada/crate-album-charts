@@ -17,9 +17,9 @@ export const Route = createFileRoute("/")({
   component: Index,
 });
 
-type Album = { id: number; name: string; artist: string; art: string };
-type Track = { id: number; name: string; preview: string; start: number };
-type Cell = { album: Album; track?: Track | undefined; note?: string } | null;
+import type { Album, Track, Cell } from "@/lib/chart-types";
+import { createChart, saveChart } from "@/lib/charts.functions";
+const SHARE = "crate-share-v1";
 
 const STORE = "crate-chart-v1";
 const big = (u: string) => u.replace("100x100bb", "600x600bb");
@@ -32,6 +32,7 @@ function Index() {
   const [selected, setSelected] = useState(0);
   const [showNames, setShowNames] = useState(true);
   const [loaded, setLoaded] = useState(false);
+  const [shareInfo, setShareInfo] = useState<{ id: string; token: string } | null>(null);
   const [q, setQ] = useState("");
   const [results, setResults] = useState<Album[]>([]);
   const [searching, setSearching] = useState(false);
@@ -42,9 +43,8 @@ function Index() {
 
   useEffect(() => {
     try {
-      const h = window.location.hash.startsWith("#c=") ? window.location.hash.slice(3) : "";
-      const d = h ? JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(h))))) : JSON.parse(localStorage.getItem(STORE) || "null");
-      if (h) history.replaceState(null, "", window.location.pathname);
+      const d = JSON.parse(localStorage.getItem(STORE) || "null");
+      setShareInfo(JSON.parse(localStorage.getItem(SHARE) || "null"));
       if (d) { setTitle(d.title); setCols(d.cols); setRows(d.rows); setCells([...d.cells, ...Array(100).fill(null)].slice(0, 100)); setShowNames(d.showNames ?? true); }
     } catch {}
     setLoaded(true);
@@ -55,6 +55,13 @@ function Index() {
   useEffect(() => {
     if (loaded) localStorage.setItem(STORE, JSON.stringify({ title, cols, rows, cells, showNames }));
   }, [title, cols, rows, cells, showNames, loaded]);
+  useEffect(() => {
+    if (!loaded || !shareInfo) return;
+    const t = setTimeout(() => {
+      saveChart({ data: { ...shareInfo, data: { title, cols, rows, showNames, cells: cells.slice(0, cols * rows) } } }).catch(() => {});
+    }, 800);
+    return () => clearTimeout(t);
+  }, [title, cols, rows, cells, showNames, loaded, shareInfo]);
 
   useEffect(() => {
     if (!q.trim()) { setResults([]); return; }
@@ -81,7 +88,12 @@ function Index() {
   const [copied, setCopied] = useState(false);
   const share = async () => {
     const data = { title, cols, rows, showNames, cells: cells.slice(0, total) };
-    const url = `${window.location.origin}/#c=${encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(data)))))}`;
+    let info = shareInfo;
+    if (!info) {
+      info = await createChart({ data: { data } });
+      localStorage.setItem(SHARE, JSON.stringify(info)); setShareInfo(info);
+    } else await saveChart({ data: { ...info, data } });
+    const url = `${window.location.origin}/c/${info.id}`;
     if (navigator.share) { try { await navigator.share({ title, url }); return; } catch {} }
     await navigator.clipboard.writeText(url);
     setCopied(true); setTimeout(() => setCopied(false), 2000);
@@ -106,13 +118,13 @@ function Index() {
 
   return (
     <div className="min-h-screen">
-      <header className="mx-auto flex max-w-7xl items-center gap-3 px-6 pt-8">
+      <header className="mx-auto flex max-w-[1600px] items-center gap-3 px-6 pt-8">
         <Disc3 className="h-7 w-7 text-primary" />
         <span className="font-display text-3xl italic">Crate</span>
         <span className="ml-2 text-sm text-muted-foreground">album charts that sound like you</span>
       </header>
 
-      <main className="mx-auto grid max-w-7xl gap-8 px-6 py-8 lg:grid-cols-[340px_1fr]">
+      <main className="mx-auto grid max-w-[1600px] gap-6 px-4 py-6 md:px-6 lg:grid-cols-[300px_1fr]">
         <aside className="space-y-6 lg:sticky lg:top-6 lg:self-start">
           <div className="rounded-2xl border border-border bg-card p-5">
             <label className="text-xs uppercase tracking-widest text-muted-foreground">Find albums</label>
@@ -148,21 +160,21 @@ function Index() {
             ))}
             <label className="flex items-center gap-2">
               <input type="checkbox" checked={showNames} onChange={(e) => setShowNames(e.target.checked)} className="accent-primary" />
-              Show album list beside chart
+              Show album list under chart
             </label>
             <button onClick={() => { if (confirm("Clear the whole chart?")) { setCells(Array(100).fill(null)); stop(); } }}
               className="text-xs text-muted-foreground underline-offset-4 hover:text-destructive hover:underline">Clear chart</button>
           </div>
         </aside>
 
-        <section className="rounded-3xl border border-border bg-card/60 p-6 shadow-record md:p-8">
+        <section className="rounded-3xl border border-border bg-card/60 p-4 shadow-record md:p-6">
           <div className="mb-6 flex items-start justify-between gap-4">
             <h1 className="font-display text-5xl leading-none md:text-6xl">{title}</h1>
             <button onClick={share} className="flex shrink-0 items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
               {copied ? <Check className="h-4 w-4" /> : <Share2 className="h-4 w-4" />}{copied ? "Link copied" : "Share"}
             </button>
           </div>
-          <div className="flex flex-col gap-8 xl:flex-row">
+          <div className="flex flex-col gap-8">
             <div className="grid flex-1 gap-2" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0,1fr))` }}>
               {cells.slice(0, total).map((c, i) => {
                 const key = `cell-${i}`;
@@ -203,7 +215,7 @@ function Index() {
               })}
             </div>
             {showNames && filled.length > 0 && (
-              <ol className="space-y-1.5 text-sm xl:w-72">
+              <ol className="grid gap-x-8 gap-y-2 text-sm sm:grid-cols-2">
                 {filled.map(({ c, i }) => (
                   <li key={i} className="flex gap-2">
                     <span className="w-6 text-right font-display text-lg leading-5 text-primary">{i + 1}</span>

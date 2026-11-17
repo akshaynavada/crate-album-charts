@@ -28,3 +28,5 @@ use the editor.
   own key and store it in Secrets.
 - **Secrets.** Lovable manages them. Do not put secret values in the repo.
 <!-- LOVABLE:END -->
+
+- Shared charts live in the `charts` table, reachable only through server functions in src/lib/charts.functions.ts; edits require the secret edit token kept in the creator's browser — no login needed, and viewers of /c/$id cannot change anything.
