@@ -90,7 +90,7 @@ function Index() {
     setPicker(idx);
   };
   const update = (i: number, c: Cell) => setCells((p) => p.map((x, j) => (j === i ? c : x)));
-  const swap = (a: number, b: number) => setCells((p) => { const n = [...p]; [n[a], n[b]] = [n[b], n[a]]; return n; });
+  const swap = (a: number, b: number) => setCells((p) => { const n = [...p]; const t = n[a] ?? null; n[a] = n[b] ?? null; n[b] = t; return n; });
 
   const filled = cells.slice(0, total).map((c, i) => ({ c, i })).filter((x) => x.c);
 
@@ -204,7 +204,7 @@ function Index() {
         </section>
       </main>
 
-      <SongPicker idx={picker} cell={picker !== null ? cells[picker] : null} playing={playing} play={play} stop={stop}
+      <SongPicker idx={picker} cell={picker !== null ? (cells[picker] ?? null) : null} playing={playing} play={play} stop={stop}
         onClose={() => { stop(); setPicker(null); }}
         onPick={(t) => { if (picker !== null && cells[picker]) update(picker, { ...cells[picker]!, track: t }); stop(); setPicker(null); }} />
     </div>
