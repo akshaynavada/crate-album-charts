@@ -9,14 +9,14 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { useFontLink } from "@/components/ThemeScope";
 import { useBackToClose } from "@/lib/use-back-to-close";
 import {
-  ACCENT_SWATCHES, FONTS, FONT_IDS, GRID_STYLES, PRESETS, PRESET_IDS, STYLE_KEYS, paletteFromCover, swatchFontsHref,
-  type CrateTheme, type ListSettings, type Palette, type PresetId, type ResolvedTheme,
+  ACCENT_SWATCHES, COVER_SIZES, FONTS, FONT_IDS, GRID_STYLES, PRESETS, PRESET_IDS, STYLE_KEYS, paletteFromCover, swatchFontsHref,
+  type CoverSize, type CrateTheme, type ListSettings, type Palette, type PresetId, type ResolvedTheme,
 } from "@/lib/theme";
 
 type Props = {
   open: boolean; onOpenChange: (o: boolean) => void;
   theme: CrateTheme; setTheme: Dispatch<SetStateAction<CrateTheme>>; resolved: ResolvedTheme; covers: string[];
-  cols: number; setCols: (n: number) => void; rows: number; setRows: (n: number) => void;
+  count: number; setCount: (n: number) => void;
   showNames: boolean; setShowNames: (b: boolean) => void;
   onClear: () => void;
   title: string; setTitle: (t: string) => void;
@@ -30,15 +30,15 @@ export function CustomizePanel(p: Props) {
   const [matchError, setMatchError] = useState<string | null>(null);
 
   // Everything as it was when the pane opened, so Discard can put it back.
-  type Snap = { title: string; theme: CrateTheme; cols: number; rows: number; showNames: boolean };
+  type Snap = { title: string; theme: CrateTheme; count: number; showNames: boolean };
   const [snap, setSnap] = useState<Snap | null>(null);
   useEffect(() => {
-    if (p.open) setSnap({ title: p.title, theme, cols: p.cols, rows: p.rows, showNames: p.showNames });
+    if (p.open) setSnap({ title: p.title, theme, count: p.count, showNames: p.showNames });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [p.open]);
-  const dirty = !!snap && JSON.stringify(snap) !== JSON.stringify({ title: p.title, theme, cols: p.cols, rows: p.rows, showNames: p.showNames });
+  const dirty = !!snap && JSON.stringify(snap) !== JSON.stringify({ title: p.title, theme, count: p.count, showNames: p.showNames });
   const discard = () => {
-    if (snap) { p.setTitle(snap.title); setTheme(snap.theme); p.setCols(snap.cols); p.setRows(snap.rows); p.setShowNames(snap.showNames); }
+    if (snap) { p.setTitle(snap.title); setTheme(snap.theme); p.setCount(snap.count); p.setShowNames(snap.showNames); }
     setConfirming(false);
     p.onOpenChange(false);
   };
@@ -111,13 +111,14 @@ export function CustomizePanel(p: Props) {
               className="w-full rounded-lg border border-input bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring" />
           </Section>
 
-          <Section title="Grid size">
-            {([["Columns", p.cols, p.setCols], ["Rows", p.rows, p.setRows]] as const).map(([l, v, setV]) => (
-              <label key={l} className="block">
-                <span className="flex justify-between text-xs text-muted-foreground"><span>{l}</span><span className="text-foreground">{v}</span></span>
-                <input type="range" min={1} max={10} value={v} onChange={(e) => setV(+e.target.value)} className="mt-1.5 w-full accent-primary" />
-              </label>
-            ))}
+          <Section title="Albums">
+            <Row label="How many">
+              <CountInput value={p.count} onChange={p.setCount} />
+            </Row>
+            <Row label="Cover size">
+              <Chips value={resolved.coverSize} options={(Object.keys(COVER_SIZES) as CoverSize[]).map((k) => [k, COVER_SIZES[k].label] as const)} onChange={(v) => set({ coverSize: v })} />
+            </Row>
+            <p className="text-xs text-muted-foreground">Rows fill in to fit the screen, so it looks right on phones and big screens.</p>
           </Section>
 
           <Section title="Album list">
@@ -132,7 +133,7 @@ export function CustomizePanel(p: Props) {
                   <Chips value={list.size} options={[["sm", "S"], ["md", "M"], ["lg", "L"]]} onChange={(v) => setList({ size: v })} />
                 </Row>
                 <Row label="Show top">
-                  <TopN value={list.top} max={p.cols * p.rows} onChange={(n) => setList({ top: n })} />
+                  <TopN value={list.top} max={p.count} onChange={(n) => setList({ top: n })} />
                 </Row>
                 <Row label="Show">
                   <div className="flex flex-wrap gap-1">
@@ -345,5 +346,23 @@ function PresetSwatch({ id, active, covers, onPick }: { id: PresetId; active: bo
       </div>
       <span className="mt-1.5 block truncate text-[13px] leading-tight" style={{ fontFamily: `"${font.family}", ${font.fallback}` }}>{p.name}</span>
     </button>
+  );
+}
+
+/** Number of albums in the chart (1–100), with − / + buttons for thumbs. */
+function CountInput({ value, onChange }: { value: number; onChange: (n: number) => void }) {
+  const [text, setText] = useState(String(value));
+  useEffect(() => setText(String(value)), [value]);
+  const commit = (n: number) => onChange(Math.max(1, Math.min(100, Math.round(n))));
+  const btn = "grid h-8 w-8 place-items-center rounded-full border border-border text-base hover:bg-muted disabled:opacity-40";
+  return (
+    <div className="flex items-center gap-1.5">
+      <button onClick={() => commit(value - 1)} disabled={value <= 1} aria-label="Fewer albums" className={btn}>−</button>
+      <input inputMode="numeric" value={text} aria-label="Number of albums"
+        onChange={(e) => { const v = e.target.value.replace(/\D/g, "").slice(0, 3); setText(v); if (+v >= 1) commit(+v); }}
+        onBlur={() => setText(String(value))}
+        className="w-14 rounded-full border border-input bg-background px-2 py-1.5 text-center text-sm outline-none focus:ring-2 focus:ring-ring" />
+      <button onClick={() => commit(value + 1)} disabled={value >= 100} aria-label="More albums" className={btn}>+</button>
+    </div>
   );
 }

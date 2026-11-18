@@ -87,6 +87,10 @@ export type ListSettings = {
   top: number;
 };
 export const DEFAULT_LIST: ListSettings = { pos: "side", num: "paren", size: "md", song: false, note: false, genre: false, fff: false, top: 0 };
+export type CoverSize = "sm" | "md" | "lg";
+export const COVER_SIZES: Record<CoverSize, { label: string; px: string; share: string }> = {
+  sm: { label: "S", px: "140px", share: "30%" }, md: { label: "M", px: "200px", share: "45%" }, lg: { label: "L", px: "270px", share: "100%" },
+};
 export const formatRank = (n: number, style: ListNum) =>
   style === "paren" ? `${n})` : style === "dot" ? `${n}.` : style === "hash" ? `#${n}` : style === "pad" ? String(n).padStart(2, "0") : "";
 
@@ -111,6 +115,8 @@ export const themeSchema = z.object({
   gap: px.optional(),
   cover: z.enum(["normal", "mono", "tint"]).optional(),
   grain: z.boolean().optional(),
+  /** How big covers are; the grid fits as many per row as the screen allows. */
+  coverSize: z.enum(["sm", "md", "lg"]).optional(),
   list: z.object({
     pos: z.enum(["below", "side"]), num: z.enum(["paren", "dot", "hash", "pad", "none"]), size: z.enum(["sm", "md", "lg"]),
     song: z.boolean(), note: z.boolean(), genre: z.boolean(), fff: z.boolean(), top: z.number().int().min(0).max(100),
@@ -144,7 +150,7 @@ function ensureContrast(c: string, bg: string, toward: string, min: number) {
 export type ResolvedTheme = {
   preset: PresetId; palette: Palette; basePalette: Palette; grid: GridStyle; adjusted: boolean; light: boolean;
   displayFont: FontId; bodyFont: FontId; titleCase: TitleCase; shape: Shape; radius: number; gap: number;
-  cover: CoverEffect; grain: boolean; list: ListSettings;
+  cover: CoverEffect; grain: boolean; list: ListSettings; coverSize: CoverSize;
   style: CSSProperties; attrs: Record<string, string>; fontHref: string; tagline: string;
 };
 
@@ -168,6 +174,7 @@ export function resolveTheme(input: CrateTheme | undefined): ResolvedTheme {
   const cover = t.cover ?? p.cover ?? "normal";
   const grain = t.grain ?? p.grain ?? false;
   const list = { ...DEFAULT_LIST, ...(t.list ?? {}) } as ListSettings;
+  const coverSize = t.coverSize ?? "md";
   const onAccent = contrast("#0b0b0c", accent) >= contrast("#fafaf7", accent) ? "#0b0b0c" : "#fafaf7";
   const d = FONTS[displayFont], b = FONTS[bodyFont];
   const style = {
@@ -182,6 +189,8 @@ export function resolveTheme(input: CrateTheme | undefined): ResolvedTheme {
     "--crate-display": `"${d.family}", ${d.fallback}`, "--crate-sans": `"${b.family}", ${b.fallback}`,
     "--crate-radius": shape === "circle" ? "50%" : `${grid === "mosaic" ? 0 : radius}px`,
     "--crate-gap": `${gap}px`,
+    // Minimum cover width; on narrow screens the share of the row caps it (S: 3 per row, M: 2, L: 1).
+    "--crate-cell": COVER_SIZES[coverSize].px, "--crate-cell-share": COVER_SIZES[coverSize].share,
     "--shadow-record": light ? "0 20px 40px -24px rgb(0 0 0 / 0.35)" : "0 20px 50px -20px rgb(0 0 0 / 0.8)",
     colorScheme: light ? "light" : "dark",
   } as CSSProperties;
@@ -191,7 +200,7 @@ export function resolveTheme(input: CrateTheme | undefined): ResolvedTheme {
   if (grain) attrs["data-grain"] = "";
   return {
     preset: t.preset, palette, basePalette: { ...base, accent: rawAccent }, grid, light, adjusted: accent !== rawAccent || fg !== base.fg,
-    displayFont, bodyFont, titleCase, shape, radius, gap, cover, grain, list, style, attrs,
+    displayFont, bodyFont, titleCase, shape, radius, gap, cover, grain, list, coverSize, style, attrs,
     fontHref: fontsHref([displayFont, bodyFont]),
     tagline: t.tagline?.trim() ?? "",
   };

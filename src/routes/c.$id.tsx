@@ -4,7 +4,7 @@ import { ArrowUpRight, Disc3, Pause, Play, Plus } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlbumModal } from "@/components/AlbumModal";
 import { getChart } from "@/lib/charts.functions";
-import type { ChartData } from "@/lib/chart-types";
+import { chartCount, type ChartData } from "@/lib/chart-types";
 import { canPlay, usePlayer } from "@/lib/use-player";
 import { refreshPreviews } from "@/lib/deezer-previews";
 import { parseTheme, resolveTheme } from "@/lib/theme";
@@ -66,7 +66,7 @@ function SharedChart() {
   }, [soundBlocked]);
 
   if (!data) return null;
-  const cells = data.cells.slice(0, data.cols * data.rows);
+  const cells = data.cells.slice(0, chartCount(data));
   const cellKey = (i: number) => `cell-${i}`;
 
   const hoverStart = (i: number, e: React.PointerEvent) => {
@@ -120,7 +120,7 @@ function SharedChart() {
         {data.title && <h1 className="crate-title mb-2 font-display text-5xl leading-none md:text-7xl">{data.title}</h1>}
         {theme.tagline && <p className="mb-2 text-base text-foreground/80 md:text-lg">{theme.tagline}</p>}
         <div className={`mt-8 flex flex-col gap-10 ${data.showNames && theme.list.pos === "side" ? "lg:flex-row lg:items-start" : ""}`}>
-          <div className="crate-grid grid min-w-0 flex-1" style={{ gridTemplateColumns: `repeat(${data.cols}, minmax(0,1fr))` }}>
+          <div className="crate-grid grid min-w-0 flex-1">
             {cells.map((c, i) => {
               const isPlaying = player.playing === cellKey(i);
               return (

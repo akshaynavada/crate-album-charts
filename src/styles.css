@@ -140,7 +140,7 @@ body { font-family: var(--font-sans); background-image: var(--gradient-glow); ba
   isolation: isolate;
   background-image: radial-gradient(ellipse at top, color-mix(in oklab, var(--primary) 7%, transparent), transparent 60%);
 }
-.crate-grid { gap: var(--crate-gap, 8px); }
+.crate-grid { gap: var(--crate-gap, 8px); grid-template-columns: repeat(auto-fill, minmax(min(var(--crate-cell, 200px), var(--crate-cell-share, 45%)), 1fr)); }
 .crate-cell { border-radius: var(--crate-radius, 6px); transition: transform 0.25s ease, box-shadow 0.25s ease, filter 0.25s ease, scale 0.25s ease, rotate 0.25s ease; }
 .crate-cover { transition: filter 0.3s ease, transform 0.3s ease; }
 [data-case="upper"] .crate-title { text-transform: uppercase; letter-spacing: -0.01em; }

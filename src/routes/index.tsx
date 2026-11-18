@@ -25,6 +25,7 @@ export const Route = createFileRoute("/")({
 });
 
 import type { Album, Track, Cell, PickDetails } from "@/lib/chart-types";
+import { chartCount, legacyGrid } from "@/lib/chart-types";
 import { createChart, openChartForEdit, saveChart } from "@/lib/charts.functions";
 import { EditLinkDialog, editLinkFor, readEditLink } from "@/components/EditLinkDialog";
 import { DEFAULT_THEME, parseTheme, resolveTheme, type CrateTheme } from "@/lib/theme";
@@ -56,8 +57,7 @@ const big = (u: string) => u.replace("100x100bb", "600x600bb");
 
 function Index() {
   const [title, setTitle] = useState("My Top Albums");
-  const [cols, setCols] = useState(4);
-  const [rows, setRows] = useState(4);
+  const [count, setCount] = useState(10);
   const [cells, setCells] = useState<Cell[]>(Array(100).fill(null));
   const [selected, setSelected] = useState(0);
   const [showNames, setShowNames] = useState(true);
@@ -103,7 +103,7 @@ function Index() {
     }
   }, []);
   function applyChart(d: any) {
-    setTitle(d.title ?? ""); setCols(d.cols); setRows(d.rows); setCells([...d.cells, ...Array(100).fill(null)].slice(0, 100));
+    setTitle(d.title ?? ""); setCount(chartCount(d)); setCells([...d.cells, ...Array(100).fill(null)].slice(0, 100));
     setShowNames(d.showNames ?? true); setTheme(parseTheme(d.theme));
   }
   useEffect(() => {
@@ -115,16 +115,16 @@ function Index() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded]);
   useEffect(() => {
-    if (loaded) localStorage.setItem(STORE, JSON.stringify({ title, cols, rows, cells, showNames, theme }));
-  }, [title, cols, rows, cells, showNames, theme, loaded]);
+    if (loaded) localStorage.setItem(STORE, JSON.stringify({ title, ...legacyGrid(count), count, cells, showNames, theme }));
+  }, [title, count, cells, showNames, theme, loaded]);
   useEffect(() => {
     // While the Customize pane is open, changes are a draft: the shared page updates once they're saved.
     if (!loaded || !shareInfo || customizing) return;
     const t = setTimeout(() => {
-      saveChart({ data: { ...shareInfo, data: { title, cols, rows, showNames, cells: cells.slice(0, cols * rows), theme } } }).catch(() => {});
+      saveChart({ data: { ...shareInfo, data: chartData() } }).catch(() => {});
     }, 800);
     return () => clearTimeout(t);
-  }, [title, cols, rows, cells, showNames, theme, loaded, shareInfo, customizing]);
+  }, [title, count, cells, showNames, theme, loaded, shareInfo, customizing]);
 
   useEffect(() => {
     if (!q.trim()) { setResults([]); setResultSrc("apple"); return; }
@@ -162,7 +162,7 @@ function Index() {
   const ensureSaved = () => {
     if (shareInfo) return Promise.resolve(shareInfo);
     if (!creating.current) {
-      const data = { title, cols, rows, showNames, cells: cells.slice(0, cols * rows), theme };
+      const data = chartData();
       creating.current = createChart({ data: { data } }).then((info) => {
         localStorage.setItem(SHARE, JSON.stringify(info)); setShareInfo(info);
         return info;
@@ -170,7 +170,7 @@ function Index() {
     }
     return creating.current;
   };
-  const hasAlbum = cells.some((c, i) => c && i < cols * rows);
+  const hasAlbum = cells.some((c, i) => c && i < count);
   const [saveFailed, setSaveFailed] = useState(false);
   const retrySave = () => { setSaveFailed(false); ensureSaved().catch(() => setSaveFailed(true)); };
   useEffect(() => {
@@ -182,7 +182,7 @@ function Index() {
 
   const [copied, setCopied] = useState(false);
   const share = async () => {
-    const data = { title, cols, rows, showNames, cells: cells.slice(0, total), theme };
+    const data = chartData();
     const hadInfo = !!shareInfo;
     const info = await ensureSaved();
     if (hadInfo) await saveChart({ data: { ...info, data } });
@@ -192,7 +192,9 @@ function Index() {
     setCopied(true); setTimeout(() => setCopied(false), 2000);
   };
 
-  const total = cols * rows;
+  const total = count;
+  /** What gets saved online: just the chart's spots, plus cols/rows for older readers. */
+  function chartData() { return { title, ...legacyGrid(count), count, showNames, cells: cells.slice(0, count), theme }; }
   // Clicking an empty spot makes it the target for the next search pick and jumps to the search box.
   const searchRef = useRef<HTMLInputElement>(null);
   const pickSpot = (i: number) => {
@@ -377,7 +379,7 @@ function Index() {
             </div>
           </div>
           <div className={`flex flex-col gap-8 ${showNames && resolved.list.pos === "side" ? "lg:flex-row lg:items-start" : ""}`}>
-            <div ref={gridRef} className="crate-grid grid min-w-0 flex-1 [-webkit-touch-callout:none] select-none" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0,1fr))` }}>
+            <div ref={gridRef} className="crate-grid grid min-w-0 flex-1 [-webkit-touch-callout:none] select-none">
               {cells.slice(0, total).map((c, i) => {
                 const key = `cell-${i}`;
                 const isPlaying = playing === key;
@@ -437,7 +439,7 @@ function Index() {
       )}
       <EditLinkDialog open={editLinkOpen} onOpenChange={setEditLinkOpen} url={shareInfo ? editLinkFor(shareOrigin(), shareInfo) : ""} />
       <CustomizePanel open={customizing} onOpenChange={setCustomizing} theme={theme} setTheme={setTheme} resolved={resolved}
-        covers={filled.map((x) => x.c!.album.art)} cols={cols} setCols={setCols} rows={rows} setRows={setRows}
+        covers={filled.map((x) => x.c!.album.art)} count={count} setCount={setCount}
         showNames={showNames} setShowNames={setShowNames} onClear={clearChart} title={title} setTitle={setTitle} />
       <SongPicker idx={picker} cell={pickerCell} player={player} isNew={!!pending} onClose={closePicker} onPick={savePick}
         onRemove={() => { if (picker !== null) update(picker, null); closePicker(); }} />

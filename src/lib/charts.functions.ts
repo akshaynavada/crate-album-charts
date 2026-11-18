@@ -6,6 +6,7 @@ const dataSchema = z.object({
   title: z.string().max(200),
   cols: z.number().int().min(1).max(10),
   rows: z.number().int().min(1).max(10),
+  count: z.number().int().min(1).max(100).optional(),
   showNames: z.boolean(),
   cells: z.array(z.any()).max(100),
   // Invalid or tampered theme data falls back to the default instead of rejecting the save.
