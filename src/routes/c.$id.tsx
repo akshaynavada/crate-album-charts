@@ -111,13 +111,13 @@ function SharedChart() {
 
   return (
     <ThemeScope theme={theme} className="min-h-screen">
-      <header className="mx-auto flex max-w-[1400px] items-center justify-between gap-3 px-4 pt-6 md:px-6">
+      <header className="mx-auto flex max-w-[2000px] items-center justify-between gap-3 px-4 pt-6 md:px-8 2xl:px-12">
         <Link to="/" className="flex items-center gap-2"><Disc3 className="h-6 w-6" /><span className="font-display text-2xl italic">Crate</span></Link>
         <Link to="/" className="flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
           <Plus className="h-4 w-4" />Make your own crate
         </Link>
       </header>
-      <main className="mx-auto max-w-[1400px] px-4 py-8 md:px-6">
+      <main className="mx-auto max-w-[2000px] px-4 py-8 md:px-8 2xl:px-12">
         {data.title && <h1 className="crate-title mb-2 font-display text-5xl leading-none md:text-7xl">{data.title}</h1>}
         {theme.tagline && <p className="mb-2 text-base text-foreground/80 md:text-lg">{theme.tagline}</p>}
         <div className={`mt-8 flex flex-col gap-10 ${data.showNames && theme.list.pos === "side" ? "lg:flex-row lg:items-start" : ""}`}>

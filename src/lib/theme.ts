@@ -89,7 +89,7 @@ export type ListSettings = {
 export const DEFAULT_LIST: ListSettings = { pos: "side", num: "paren", size: "md", song: false, note: false, genre: false, fff: false, top: 0 };
 export type CoverSize = "sm" | "md" | "lg";
 export const COVER_SIZES: Record<CoverSize, { label: string; px: string; share: string }> = {
-  sm: { label: "S", px: "110px", share: "30%" }, md: { label: "M", px: "160px", share: "45%" }, lg: { label: "L", px: "260px", share: "100%" },
+  sm: { label: "S", px: "110px", share: "22%" }, md: { label: "M", px: "160px", share: "30%" }, lg: { label: "L", px: "260px", share: "45%" },
 };
 export const formatRank = (n: number, style: ListNum) =>
   style === "paren" ? `${n})` : style === "dot" ? `${n}.` : style === "hash" ? `#${n}` : style === "pad" ? String(n).padStart(2, "0") : "";
@@ -189,7 +189,7 @@ export function resolveTheme(input: CrateTheme | undefined): ResolvedTheme {
     "--crate-display": `"${d.family}", ${d.fallback}`, "--crate-sans": `"${b.family}", ${b.fallback}`,
     "--crate-radius": shape === "circle" ? "50%" : `${grid === "mosaic" ? 0 : radius}px`,
     "--crate-gap": `${gap}px`,
-    // Minimum cover width; on narrow screens the share of the row caps it (S: 3 per row, M: 2, L: 1).
+    // Minimum cover width; on narrow screens the share of the row caps it (phones: S 4 per row, M 3, L 2).
     "--crate-cell": COVER_SIZES[coverSize].px, "--crate-cell-share": COVER_SIZES[coverSize].share,
     "--shadow-record": light ? "0 20px 40px -24px rgb(0 0 0 / 0.35)" : "0 20px 50px -20px rgb(0 0 0 / 0.8)",
     colorScheme: light ? "light" : "dark",

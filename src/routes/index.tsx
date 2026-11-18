@@ -301,13 +301,13 @@ function Index() {
   return (
     // On wide screens, make room for the Customize pane so the live preview stays visible.
     <div className={`min-h-screen transition-[padding] duration-300 ${customizing ? "lg:pr-[24rem]" : ""}`}>
-      <header className="mx-auto flex max-w-[1600px] items-center gap-3 px-4 pt-5 md:px-6 md:pt-8">
+      <header className="mx-auto flex max-w-[2000px] items-center gap-3 px-4 pt-5 md:px-6 md:pt-8 2xl:px-10">
         <Disc3 className="h-7 w-7 text-primary" />
         <span className="font-display text-3xl italic">Crate</span>
         <span className="ml-2 hidden text-sm text-muted-foreground sm:inline">album charts that sound like you</span>
       </header>
 
-      <main className="mx-auto grid max-w-[1600px] gap-4 px-4 py-4 md:gap-6 md:px-6 md:py-6 lg:grid-cols-[300px_1fr]">
+      <main className="mx-auto grid max-w-[2000px] gap-4 px-4 py-4 md:gap-6 md:px-6 md:py-6 2xl:px-10 lg:grid-cols-[300px_1fr]">
         <aside className="space-y-6 lg:sticky lg:top-6 lg:self-start">
           <div className="rounded-2xl border border-border bg-card p-4 md:p-5">
             <label className="text-xs uppercase tracking-widest text-muted-foreground">Find albums</label>
