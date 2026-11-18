@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Cloud, CloudCheck, CloudOff, Search, Play, Pause, Disc3, Share2, Check, SlidersHorizontal, Pencil, Trash2 } from "lucide-react";
+import { Cloud, CloudCheck, CloudOff, Plus, Search, Play, Pause, Disc3, Share2, Check, SlidersHorizontal, Pencil, Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { usePlayer } from "@/lib/use-player";
 import { fetchAlbum, splitFff, type AlbumTrack } from "@/lib/itunes";
@@ -72,6 +72,7 @@ function Index() {
   const [resultSrc, setResultSrc] = useState<"apple" | "deezer">("apple");
   const [picker, setPicker] = useState<number | null>(null);
   const [customizing, setCustomizing] = useState(false);
+  const [focusCount, setFocusCount] = useState(0); // bumped to open Customize focused on "How many"
   const [theme, setTheme] = useState<CrateTheme>(DEFAULT_THEME);
   const resolved = useMemo(() => resolveTheme(theme), [theme]);
   const player = usePlayer();
@@ -420,6 +421,13 @@ function Index() {
                   </div>
                 );
               })}
+              {/* Not a spot: opens Customize at "How many" so the chart can hold more albums. */}
+              {total < 100 && (
+                <button onClick={() => { setCustomizing(true); setFocusCount((n) => n + 1); }} aria-label="Add more spots" title="Change how many albums"
+                  className="flex aspect-square flex-col items-center justify-center gap-1 rounded-[var(--crate-radius,6px)] border-2 border-dashed border-border text-muted-foreground transition hover:border-primary hover:text-primary">
+                  <Plus className="h-7 w-7" /><span className="text-xs">More spots</span>
+                </button>
+              )}
             </div>
             {showNames && (
               <RankList cells={cells.slice(0, total)} list={resolved.list} onOpen={(i) => setPicker(i)}
@@ -439,7 +447,7 @@ function Index() {
       )}
       <EditLinkDialog open={editLinkOpen} onOpenChange={setEditLinkOpen} url={shareInfo ? editLinkFor(shareOrigin(), shareInfo) : ""} />
       <CustomizePanel open={customizing} onOpenChange={setCustomizing} theme={theme} setTheme={setTheme} resolved={resolved}
-        covers={filled.map((x) => x.c!.album.art)} count={count} setCount={setCount}
+        covers={filled.map((x) => x.c!.album.art)} count={count} setCount={setCount} focusCount={focusCount}
         showNames={showNames} setShowNames={setShowNames} onClear={clearChart} title={title} setTitle={setTitle} />
       <SongPicker idx={picker} cell={pickerCell} player={player} isNew={!!pending} onClose={closePicker} onPick={savePick}
         onRemove={() => { if (picker !== null) update(picker, null); closePicker(); }} />

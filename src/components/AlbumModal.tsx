@@ -29,22 +29,60 @@ export function AlbumModal({ cell, index, onClose, player, position, onPrev, onN
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-      if (e.key === "ArrowRight" && onNext) { e.preventDefault(); onNext(); }
-      if (e.key === "ArrowLeft" && onPrev) { e.preventDefault(); onPrev(); }
+      if (e.key === "ArrowRight" && onNext) { e.preventDefault(); setEnterFrom("right"); onNext(); }
+      if (e.key === "ArrowLeft" && onPrev) { e.preventDefault(); setEnterFrom("left"); onPrev(); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onPrev, onNext]);
-  const touch = useRef<{ x: number; y: number } | null>(null);
-  const onTouchStart = (e: React.TouchEvent) => { const t = e.touches[0]; touch.current = t && e.touches.length === 1 ? { x: t.clientX, y: t.clientY } : null; };
+  // Swiping: the album follows the finger (with resistance at the first / last pick), then slides to the
+  // next one or springs back. The new album slides in from the side it came from.
+  const touch = useRef<{ x: number; y: number; horizontal: boolean | null } | null>(null);
+  const [dragX, setDragX] = useState(0);
+  const [enterFrom, setEnterFrom] = useState<"left" | "right" | null>(null);
+  const go = (dir: 1 | -1) => {
+    const fn = dir === 1 ? onNext : onPrev;
+    if (!fn) return;
+    setEnterFrom(dir === 1 ? "right" : "left");
+    fn();
+  };
+  const onTouchStart = (e: React.TouchEvent) => {
+    const t = e.touches[0];
+    touch.current = t && e.touches.length === 1 ? { x: t.clientX, y: t.clientY, horizontal: null } : null;
+  };
+  const onTouchMove = (e: React.TouchEvent) => {
+    const s = touch.current, t = e.touches[0];
+    if (!s || !t) return;
+    const dx = t.clientX - s.x, dy = t.clientY - s.y;
+    if (s.horizontal === null && Math.hypot(dx, dy) > 10) s.horizontal = Math.abs(dx) > Math.abs(dy) * 1.2;
+    if (!s.horizontal) return;
+    const blocked = dx < 0 ? !onNext : !onPrev;
+    setDragX(blocked ? dx * 0.25 : dx);
+  };
   const onTouchEnd = (e: React.TouchEvent) => {
     const s = touch.current, t = e.changedTouches[0];
     touch.current = null;
-    if (!s || !t) return;
-    const dx = t.clientX - s.x, dy = t.clientY - s.y;
-    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return; // mostly-vertical moves are scrolling
-    if (dx < 0) onNext?.(); else onPrev?.();
+    setDragX(0);
+    if (!s?.horizontal || !t) return;
+    const dx = t.clientX - s.x;
+    if (Math.abs(dx) < 60) return;
+    go(dx < 0 ? 1 : -1);
   };
+
+  useEffect(() => { if (!open) setEnterFrom(null); }, [open]);
+
+  // First time on a phone: nudge the album sideways once and say it can be swiped.
+  const [showHint, setShowHint] = useState(false);
+  const many = !!position && position.of > 1;
+  useEffect(() => {
+    if (!open || !many || !window.matchMedia("(hover: none)").matches) return;
+    let seen = false;
+    try { seen = localStorage.getItem("crate-swipe-hint") === "1"; localStorage.setItem("crate-swipe-hint", "1"); } catch {}
+    if (seen) return;
+    setShowHint(true);
+    const t = setTimeout(() => setShowHint(false), 3200);
+    return () => clearTimeout(t);
+  }, [open, many]);
 
   if (!cell) return null;
   const hooked = cell.track;
@@ -57,24 +95,60 @@ export function AlbumModal({ cell, index, onClose, player, position, onPrev, onN
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       {/* Desktop: square art on the left sized to the dialog height, details scroll on the right. */}
       {/* Dialogs portal out of the themed wrapper, so re-apply the crate theme here. */}
-      <DialogContent {...theme.attrs} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} style={{ ...theme.style, ["--h" as string]: "min(86vh, 600px, 52vw)" }}
+      <DialogContent {...theme.attrs} onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd} onTouchCancel={() => { touch.current = null; setDragX(0); }} style={{ ...theme.style, ["--h" as string]: "min(86vh, 600px, 52vw)" }}
         className="font-sans text-foreground max-h-[92vh] max-sm:top-[calc(50%-1.75rem)] max-sm:max-h-[calc(100dvh-8rem)] max-w-[calc(var(--h)+400px)] gap-0 overflow-y-auto p-0 md:overflow-hidden [&>button:last-child]:rounded-full [&>button:last-child]:bg-background/70 [&>button:last-child]:p-1.5">
-        <div className="grid md:h-[var(--h)] md:grid-cols-[var(--h)_minmax(0,1fr)]">
-          <img src={cell.album.art} alt={`${cell.album.name} by ${cell.album.artist}`} className="aspect-square w-full object-cover sm:rounded-t-lg md:h-full md:rounded-l-lg md:rounded-tr-none" />
+        <div key={cell.album.id + ":" + index}
+          className={`grid touch-pan-y md:h-[var(--h)] md:grid-cols-[var(--h)_minmax(0,1fr)] ${dragX ? "" : "transition-transform duration-200"} ${enterFrom === "right" ? "animate-in fade-in slide-in-from-right-12 duration-200" : enterFrom === "left" ? "animate-in fade-in slide-in-from-left-12 duration-200" : ""} ${showHint ? "crate-swipe-nudge" : ""}`}
+          style={dragX ? { transform: `translateX(${dragX}px)`, opacity: Math.max(0.4, 1 - Math.abs(dragX) / 500) } : undefined}>
+          <div className="relative">
+            <img src={cell.album.art} alt={`${cell.album.name} by ${cell.album.artist}`} className="aspect-square w-full object-cover sm:rounded-t-lg md:h-full md:rounded-l-lg md:rounded-tr-none" />
+            {many && (
+              <>
+                {/* Big arrows on the cover: tap targets on phones, and a visual cue that there's more to swipe through. */}
+                {onPrev && (
+                  <button onClick={() => go(-1)} aria-label="Previous pick"
+                    className="absolute left-2 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full bg-black/40 text-white backdrop-blur-sm hover:bg-black/60"><ChevronLeft className="h-6 w-6" /></button>
+                )}
+                {onNext && (
+                  <button onClick={() => go(1)} aria-label="Next pick"
+                    className="absolute right-2 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full bg-black/40 text-white backdrop-blur-sm hover:bg-black/60"><ChevronRight className="h-6 w-6" /></button>
+                )}
+                {/* Page dots (or "3 / 25" for long charts). */}
+                <div className="absolute inset-x-0 bottom-2 flex justify-center">
+                  {position!.of <= 15 ? (
+                    <div className="flex gap-1.5 rounded-full bg-black/40 px-2 py-1.5 backdrop-blur-sm">
+                      {Array.from({ length: position!.of }, (_, k) => (
+                        <span key={k} className={`h-1.5 rounded-full transition-all ${k + 1 === position!.at ? "w-4 bg-white" : "w-1.5 bg-white/50"}`} />
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="rounded-full bg-black/40 px-2.5 py-0.5 text-xs text-white backdrop-blur-sm">{position!.at} / {position!.of}</span>
+                  )}
+                </div>
+                {showHint && (
+                  <div className="pointer-events-none absolute inset-x-0 top-3 flex justify-center">
+                    <span className="flex items-center gap-1.5 rounded-full bg-black/70 px-3 py-1.5 text-xs font-medium text-white">
+                      <ChevronLeft className="h-3.5 w-3.5" />Swipe for the next pick<ChevronRight className="h-3.5 w-3.5" />
+                    </span>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
           <div className="flex min-w-0 flex-col gap-5 p-5 md:overflow-y-auto md:p-6">
             <DialogHeader className="space-y-1 text-left">
               {index !== null && (
                 <div className="flex items-center gap-1 text-muted-foreground">
                   {position && position.of > 1 && (
-                    <button onClick={onPrev} disabled={!onPrev} aria-label="Previous pick" title="Previous (←)"
+                    <button onClick={() => go(-1)} disabled={!onPrev} aria-label="Previous" title="Previous (←)"
                       className="-ml-1.5 grid h-8 w-8 place-items-center rounded-full hover:bg-muted hover:text-foreground disabled:opacity-30"><ChevronLeft className="h-5 w-5" /></button>
                   )}
                   <span className="font-display text-lg">No. {index + 1}</span>
                   {position && position.of > 1 && (
                     <>
-                      <button onClick={onNext} disabled={!onNext} aria-label="Next pick" title="Next (→)"
+                      <button onClick={() => go(1)} disabled={!onNext} aria-label="Next" title="Next (→)"
                         className="grid h-8 w-8 place-items-center rounded-full hover:bg-muted hover:text-foreground disabled:opacity-30"><ChevronRight className="h-5 w-5" /></button>
-                      <span className="ml-1 text-xs">{position.at} of {position.of}<span className="[@media(hover:hover)]:hidden"> · swipe for more</span></span>
+                      <span className="ml-1 text-xs">{position.at} of {position.of}</span>
                     </>
                   )}
                 </div>

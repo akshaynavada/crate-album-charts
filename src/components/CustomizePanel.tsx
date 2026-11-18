@@ -1,4 +1,4 @@
-import { useEffect, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import { useEffect, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import { Check, Loader2, RotateCcw, Trash2, Wand2, X } from "lucide-react";
 import { HexColorPicker } from "react-colorful";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -17,6 +17,8 @@ type Props = {
   open: boolean; onOpenChange: (o: boolean) => void;
   theme: CrateTheme; setTheme: Dispatch<SetStateAction<CrateTheme>>; resolved: ResolvedTheme; covers: string[];
   count: number; setCount: (n: number) => void;
+  /** Changes when the "More spots" square is clicked: show Layout and focus "How many". */
+  focusCount?: number;
   showNames: boolean; setShowNames: (b: boolean) => void;
   onClear: () => void;
   title: string; setTitle: (t: string) => void;
@@ -47,6 +49,14 @@ export function CustomizePanel(p: Props) {
   const requestClose = () => (dirty ? setConfirming(true) : p.onOpenChange(false));
   useBackToClose(p.open, requestClose);
   const [tab, setTab] = useState<"layout" | "theme" | "style">("layout");
+  const countRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (!p.focusCount) return;
+    setTab("layout");
+    // Wait for the pane to open and the tab to render.
+    const t = setTimeout(() => { const el = countRef.current; if (!el) return; el.scrollIntoView({ block: "center", behavior: "smooth" }); el.focus({ preventScroll: true }); el.select(); }, 350);
+    return () => clearTimeout(t);
+  }, [p.focusCount]);
 
   // Functional updates so quick successive clicks never overwrite each other.
   const set = (patch: Partial<CrateTheme>) => setTheme((prev) => {
@@ -113,7 +123,7 @@ export function CustomizePanel(p: Props) {
 
           <Section title="Albums">
             <Row label="How many">
-              <CountInput value={p.count} onChange={p.setCount} />
+              <CountInput value={p.count} onChange={p.setCount} inputRef={countRef} />
             </Row>
             <Row label="Cover size">
               <Chips value={resolved.coverSize} options={(Object.keys(COVER_SIZES) as CoverSize[]).map((k) => [k, COVER_SIZES[k].label] as const)} onChange={(v) => set({ coverSize: v })} />
@@ -350,7 +360,7 @@ function PresetSwatch({ id, active, covers, onPick }: { id: PresetId; active: bo
 }
 
 /** Number of albums in the chart (1–100), with − / + buttons for thumbs. */
-function CountInput({ value, onChange }: { value: number; onChange: (n: number) => void }) {
+function CountInput({ value, onChange, inputRef }: { value: number; onChange: (n: number) => void; inputRef?: React.Ref<HTMLInputElement> }) {
   const [text, setText] = useState(String(value));
   useEffect(() => setText(String(value)), [value]);
   const commit = (n: number) => onChange(Math.max(1, Math.min(100, Math.round(n))));
@@ -358,7 +368,7 @@ function CountInput({ value, onChange }: { value: number; onChange: (n: number) 
   return (
     <div className="flex items-center gap-1.5">
       <button onClick={() => commit(value - 1)} disabled={value <= 1} aria-label="Fewer albums" className={btn}>−</button>
-      <input inputMode="numeric" value={text} aria-label="Number of albums"
+      <input ref={inputRef} inputMode="numeric" value={text} aria-label="Number of albums"
         onChange={(e) => { const v = e.target.value.replace(/\D/g, "").slice(0, 3); setText(v); if (+v >= 1) commit(+v); }}
         onBlur={() => setText(String(value))}
         className="w-14 rounded-full border border-input bg-background px-2 py-1.5 text-center text-sm outline-none focus:ring-2 focus:ring-ring" />

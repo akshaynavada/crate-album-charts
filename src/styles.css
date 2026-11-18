@@ -244,3 +244,8 @@ body { font-family: var(--font-sans); background-image: var(--gradient-glow); ba
 .crate-cell[data-dragging] > * { opacity: 0.15; }
 .crate-cell[data-dragging]::after { content: ""; position: absolute; inset: 0; border: 2px dashed var(--muted-foreground); border-radius: inherit; }
 .crate-cell[data-dragover] { outline: 3px solid var(--primary); outline-offset: 3px; scale: 1.06; z-index: 4; box-shadow: 0 0 0 6px color-mix(in oklab, var(--primary) 25%, transparent); }
+
+/* Album window, first visit on a phone: nudge sideways once to show it can be swiped. */
+@keyframes crate-swipe-nudge { 0%, 100% { translate: 0; } 30% { translate: -36px; } 55% { translate: 0; } 75% { translate: -14px; } }
+.crate-swipe-nudge { animation: crate-swipe-nudge 1.4s ease-in-out 0.4s 1; }
+@media (prefers-reduced-motion: reduce) { .crate-swipe-nudge { animation: none; } }
