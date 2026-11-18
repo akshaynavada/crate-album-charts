@@ -10,6 +10,7 @@ import { refreshPreviews } from "@/lib/deezer-previews";
 import { parseTheme, resolveTheme } from "@/lib/theme";
 import { ThemeScope } from "@/components/ThemeScope";
 import { RankList } from "@/components/RankList";
+import { ListenBar } from "@/components/ListenBar";
 
 const chartQuery = (id: string) =>
   queryOptions({ queryKey: ["chart", id], queryFn: () => getChart({ data: { id } }) as Promise<ChartData | null>, refetchInterval: 15000 });
@@ -162,6 +163,7 @@ function SharedChart() {
             <RankList cells={cells} list={theme.list} onOpen={(i) => setOpen(i)} onPlay={toggle} isPlaying={(i) => player.playing === cellKey(i)} />
           )}
         </div>
+        <ListenBar cells={cells} title={data.title} />
       </main>
       <AlbumModal index={open} cell={open !== null ? (cells[open] ?? null) : null} player={player}
         onClose={() => { player.stop(); setOpen(null); }} />

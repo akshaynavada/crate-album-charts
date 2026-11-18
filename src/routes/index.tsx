@@ -6,6 +6,8 @@ import { usePlayer } from "@/lib/use-player";
 import { fetchAlbum, splitFff, type AlbumTrack } from "@/lib/itunes";
 import { getRelatedArtists, searchDeezerAlbums } from "@/lib/deezer.functions";
 import { refreshPreviews } from "@/lib/deezer-previews";
+import { findYouTubeVideo } from "@/lib/youtube.functions";
+import { ListenBar } from "@/components/ListenBar";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -88,6 +90,8 @@ function Index() {
     if (!loaded) return;
     const ids = cells.flatMap((c) => (c?.track?.src === "deezer" && typeof c.track.id === "number" ? [c.track.id] : []));
     if (ids.length) refreshPreviews(ids).catch(() => {});
+    // Songs picked before YouTube matching existed (or while it was unavailable) get looked up now.
+    for (const c of cells) if (c) ensureYouTube(c);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded]);
   useEffect(() => {
@@ -170,12 +174,31 @@ function Index() {
   const closePicker = () => { stop(); setPicker(null); setPending(null); };
   const savePick = (t: Track | undefined, extra: Required<PickDetails>) => {
     if (picker !== null && pickerCell) {
-      const next = cells.map((x, j) => (j === picker ? { ...pickerCell, track: t ?? pickerCell.track, ...extra } : x));
+      const old = pickerCell.track;
+      // Same song as before: keep its YouTube match instead of searching again.
+      const track = t ? (old && old.id === t.id && old.yt !== undefined ? { ...t, yt: old.yt } : t) : old;
+      const cell = { ...pickerCell, track, ...extra };
+      const next = cells.map((x, j) => (j === picker ? cell : x));
       setCells(next);
+      ensureYouTube(cell);
       if (pending) { const after = next.findIndex((c, i) => i < total && !c); setSelected(after >= 0 ? after : picker); }
     }
     closePicker();
   };
+  // Find each picked song on YouTube once (search quota is small) and save the video id with the chart.
+  const ytTried = useRef(new Set<string>());
+  function ensureYouTube(c: NonNullable<Cell>) {
+    const t = c.track;
+    if (!t || t.yt !== undefined) return;
+    const key = `${c.album.artist}|${t.name}`;
+    if (ytTried.current.has(key)) return;
+    ytTried.current.add(key);
+    findYouTubeVideo({ data: { artist: c.album.artist, song: t.name } }).then((m) => {
+      if (m.status === "unavailable") { ytTried.current.delete(key); return; } // no key or out of quota: try again next visit
+      const yt = m.status === "found" ? m.id : "";
+      setCells((p) => p.map((x) => (x?.track && x.track.id === t.id && x.track.yt === undefined ? { ...x, track: { ...x.track, yt } } : x)));
+    }).catch(() => ytTried.current.delete(key));
+  }
   const update = (i: number, c: Cell) => setCells((p) => p.map((x, j) => (j === i ? c : x)));
   const swap = (a: number, b: number) => setCells((p) => { const n = [...p]; const t = n[a] ?? null; n[a] = n[b] ?? null; n[b] = t; return n; });
 
@@ -353,6 +376,7 @@ function Index() {
                 onPlay={(i) => { const t = cells[i]?.track; if (t) play(`cell-${i}`, t); }} isPlaying={(i) => playing === `cell-${i}`} />
             )}
           </div>
+          <ListenBar cells={cells.slice(0, total)} title={title} />
         </ThemeScope>
       </main>
 
