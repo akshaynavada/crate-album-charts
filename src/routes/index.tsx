@@ -4,7 +4,7 @@ import { Search, Music2, Play, Pause, Disc3, Share2, Check, SlidersHorizontal, P
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { usePlayer } from "@/lib/use-player";
 import { fetchAlbum, splitFff, type AlbumTrack } from "@/lib/itunes";
-import { searchDeezerAlbums } from "@/lib/deezer.functions";
+import { getRelatedArtists, searchDeezerAlbums } from "@/lib/deezer.functions";
 import { refreshPreviews } from "@/lib/deezer-previews";
 
 export const Route = createFileRoute("/")({
@@ -326,9 +326,12 @@ function SongPicker({ idx, cell, onClose, onPick, onRemove, isNew, player }: {
   const [genre, setGenre] = useState("");
   const [fff, setFff] = useState("");
   const [suggestedGenre, setSuggestedGenre] = useState<string | undefined>();
+  const [suggestedFff, setSuggestedFff] = useState<string | undefined>();
   useEffect(() => {
     if (!cell) return;
-    setTracks(null); setChosen(null); setNote(cell.note ?? ""); setGenre(cell.genre ?? ""); setFff(cell.fff ?? ""); setSuggestedGenre(undefined);
+    setTracks(null); setChosen(null); setNote(cell.note ?? ""); setGenre(cell.genre ?? ""); setFff(cell.fff ?? ""); setSuggestedGenre(undefined); setSuggestedFff(undefined);
+    const artist = cell.album.artist;
+    getRelatedArtists({ data: { artist } }).then((a) => { if (a.length) setSuggestedFff(a.join(", ")); }).catch(() => {});
     fetchAlbum(cell.album).then((d) => {
       const list = d.tracks.filter((t) => t.preview);
       setTracks(list);
@@ -379,13 +382,11 @@ function SongPicker({ idx, cell, onClose, onPick, onRemove, isNew, player }: {
                   <span className="flex items-baseline justify-between text-xs uppercase tracking-widest text-muted-foreground">
                     <span>Genre <span className="normal-case tracking-normal">(optional)</span></span>
                   </span>
-                  <input value={genre} onChange={(e) => setGenre(e.target.value)} maxLength={60} placeholder={suggestedGenre ?? "e.g. Dream pop"}
-                    className="mt-2 w-full rounded-lg border border-input bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring" />
+                  <SuggestInput value={genre} onChange={setGenre} maxLength={60} suggestion={suggestedGenre} fallback="e.g. Dream pop" />
                 </label>
                 <label className="block text-sm">
                   <span className="text-xs uppercase tracking-widest text-muted-foreground">For fans of <span className="normal-case tracking-normal">(optional)</span></span>
-                  <input value={fff} onChange={(e) => setFff(e.target.value)} maxLength={200} placeholder="Artists, comma separated"
-                    className="mt-2 w-full rounded-lg border border-input bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring" />
+                  <SuggestInput value={fff} onChange={setFff} maxLength={200} suggestion={suggestedFff} fallback="Artists, comma separated" />
                 </label>
               </div>
               <button onClick={() => onPick(chosen ? { id: chosen.id, name: chosen.name, preview: chosen.preview, start: 0, ...(chosen.src ? { src: chosen.src } : {}) } : undefined, { note: note.trim(), genre: genre.trim(), fff: splitFff(fff).join(", ") })}
@@ -401,5 +402,25 @@ function SongPicker({ idx, cell, onClose, onPick, onRemove, isNew, player }: {
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** Text field whose placeholder is a suggestion; Tab (or tapping "Use") fills it in for real. */
+function SuggestInput({ value, onChange, suggestion, fallback, maxLength }: {
+  value: string; onChange: (v: string) => void; suggestion?: string | undefined; fallback: string; maxLength: number;
+}) {
+  const offer = !value && !!suggestion;
+  return (
+    <span className="relative mt-2 block">
+      <input value={value} onChange={(e) => onChange(e.target.value)} maxLength={maxLength} placeholder={suggestion ?? fallback}
+        onKeyDown={(e) => { if (e.key === "Tab" && !e.shiftKey && offer) { e.preventDefault(); onChange(suggestion!.slice(0, maxLength)); } }}
+        className={`w-full rounded-lg border border-input bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring ${offer ? "pr-14" : ""}`} />
+      {offer && (
+        <button type="button" onClick={() => onChange(suggestion!.slice(0, maxLength))} title="Use suggestion (Tab)"
+          className="absolute right-2 top-1/2 -translate-y-1/2 rounded border border-border px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground hover:text-foreground">
+          <span className="[@media(hover:none)]:hidden">Tab</span><span className="[@media(hover:hover)]:hidden">Use</span>
+        </button>
+      )}
+    </span>
   );
 }

@@ -88,12 +88,17 @@ function SharedChart() {
     const c = cells[i];
     if (!c) return;
     const t = c.track;
-    if (lastPointer.current !== "mouse" && t && canPlay(t) && player.playing !== cellKey(i)) {
+    const playable = !!t && canPlay(t);
+    // Some phones (and Chrome's device emulation) report taps as mouse clicks, so also go by "no hover".
+    const touch = lastPointer.current !== "mouse" || window.matchMedia("(hover: none)").matches;
+    if (touch && playable && player.playing !== cellKey(i)) {
       const ok = await player.play(cellKey(i), t, { toggle: false });
       if (!ok) setSoundBlocked(true);
       return;
     }
     setOpen(i);
+    // Opening an album also starts its picked song if nothing is playing yet.
+    if (playable && !player.playing) player.play(cellKey(i), t, { toggle: false }).catch(() => {});
   };
   const toggle = (i: number) => {
     const t = cells[i]?.track;

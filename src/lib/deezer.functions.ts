@@ -56,3 +56,15 @@ export const getDeezerPreviews = createServerFn({ method: "POST" })
     }
     return out;
   });
+
+/** A few similar artists from Deezer, used to suggest "For fans of" (works for Apple albums too, matched by name). */
+export const getRelatedArtists = createServerFn({ method: "GET" })
+  .inputValidator((d: unknown) => z.object({ artist: z.string().trim().min(1).max(200) }).parse(d))
+  .handler(async ({ data }): Promise<string[]> => {
+    const s = await get(`/search/artist?q=${encodeURIComponent(data.artist)}&limit=5`);
+    const norm = (x: string) => x.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const hit = (s.data ?? []).find((a: any) => norm(a.name) === norm(data.artist)) ?? s.data?.[0];
+    if (!hit) return [];
+    const r = await get(`/artist/${hit.id}/related?limit=6`);
+    return (r.data ?? []).map((a: any) => a.name as string).slice(0, 4);
+  });
