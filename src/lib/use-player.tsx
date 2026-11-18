@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { MusicSource } from "@/lib/chart-types";
+import { freshPreview, refreshPreviews } from "@/lib/deezer-previews";
 
-export type Playable = { preview?: string | undefined; start?: number | undefined };
+export type Playable = {
+  id?: number | string | undefined; preview?: string | undefined; start?: number | undefined; src?: MusicSource | undefined;
+};
+
+/** Whether a track has something to play (Deezer tracks can always fetch a fresh preview). */
+export const canPlay = (t?: Playable | null) => !!t && (!!t.preview || (t.src === "deezer" && typeof t.id === "number"));
 
 /**
  * One <audio> element per page for Apple's 30s previews. `play` toggles when called with the key that is
@@ -21,22 +28,35 @@ export function usePlayer() {
 
   const stop = useCallback(() => {
     audio.current?.pause();
+    playingRef.current = null;
     setPlaying(null);
   }, []);
 
   const play = useCallback(async (key: string, t: Playable, opts: { toggle?: boolean } = {}) => {
     const a = audio.current;
-    if (!a || !t.preview) return false;
+    if (!a || !canPlay(t)) return false;
     if (playingRef.current === key) {
       if (opts.toggle !== false) stop();
       return true;
     }
     a.pause();
-    a.src = t.preview;
+    playingRef.current = key; // set now so the post-await check below sees it before React re-renders
+    setPlaying(key);
+    let url = t.preview;
+    if (t.src === "deezer" && typeof t.id === "number") {
+      // Deezer links expire; refresh first if needed (usually already warmed when the chart loaded).
+      url = freshPreview(t.id, t.preview) ?? undefined;
+      if (!url) {
+        await refreshPreviews([t.id]).catch(() => {});
+        url = freshPreview(t.id) ?? undefined;
+      }
+      if (playingRef.current !== key) return true; // user moved on while we were fetching
+      if (!url) { setPlaying(null); return false; }
+    }
+    a.src = url!;
     const start = t.start ?? 0;
     // Apple previews are 30s, so keep any saved start inside the clip.
     a.onloadedmetadata = () => { a.currentTime = Math.min(start, Math.max(0, (a.duration || 30) - 5)); };
-    setPlaying(key);
     try {
       await a.play();
       return true;

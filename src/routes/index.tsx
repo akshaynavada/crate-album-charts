@@ -4,6 +4,8 @@ import { Search, Music2, Play, Pause, X, Disc3, Share2, Check } from "lucide-rea
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { usePlayer } from "@/lib/use-player";
 import { fetchAlbum, splitFff, type AlbumTrack } from "@/lib/itunes";
+import { searchDeezerAlbums } from "@/lib/deezer.functions";
+import { refreshPreviews } from "@/lib/deezer-previews";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -37,6 +39,13 @@ const shareOrigin = () => {
 };
 
 const STORE = "crate-chart-v1";
+const SEARCH_IN = "crate-search-in";
+type SearchIn = "auto" | "apple" | "deezer";
+const SEARCH_OPTIONS: { id: SearchIn; label: string; hint: string }[] = [
+  { id: "auto", label: "Auto", hint: "Apple Music, or Deezer when Apple finds nothing" },
+  { id: "apple", label: "Apple", hint: "Apple Music only" },
+  { id: "deezer", label: "Deezer", hint: "Deezer only" },
+];
 const big = (u: string) => u.replace("100x100bb", "600x600bb");
 
 function Index() {
@@ -51,6 +60,10 @@ function Index() {
   const [q, setQ] = useState("");
   const [results, setResults] = useState<Album[]>([]);
   const [searching, setSearching] = useState(false);
+  /** Where to search. "auto" = Apple, falling back to Deezer when Apple finds nothing. */
+  const [searchIn, setSearchIn] = useState<SearchIn>("auto");
+  /** Which catalog the results on screen came from. */
+  const [resultSrc, setResultSrc] = useState<"apple" | "deezer">("apple");
   const [picker, setPicker] = useState<number | null>(null);
   const [theme, setTheme] = useState<CrateTheme>(DEFAULT_THEME);
   const resolved = useMemo(() => resolveTheme(theme), [theme]);
@@ -62,10 +75,18 @@ function Index() {
     try {
       const d = JSON.parse(localStorage.getItem(STORE) || "null");
       setShareInfo(JSON.parse(localStorage.getItem(SHARE) || "null"));
+      const s = localStorage.getItem(SEARCH_IN);
+      if (s === "auto" || s === "apple" || s === "deezer") setSearchIn(s);
       if (d) { setTitle(d.title); setCols(d.cols); setRows(d.rows); setCells([...d.cells, ...Array(100).fill(null)].slice(0, 100)); setShowNames(d.showNames ?? true); setTheme(parseTheme(d.theme)); }
     } catch {}
     setLoaded(true);
   }, []);
+  useEffect(() => {
+    if (!loaded) return;
+    const ids = cells.flatMap((c) => (c?.track?.src === "deezer" && typeof c.track.id === "number" ? [c.track.id] : []));
+    if (ids.length) refreshPreviews(ids).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded]);
   useEffect(() => {
     if (loaded) localStorage.setItem(STORE, JSON.stringify({ title, cols, rows, cells, showNames, theme }));
   }, [title, cols, rows, cells, showNames, theme, loaded]);
@@ -78,18 +99,34 @@ function Index() {
   }, [title, cols, rows, cells, showNames, theme, loaded, shareInfo]);
 
   useEffect(() => {
-    if (!q.trim()) { setResults([]); return; }
+    if (!q.trim()) { setResults([]); setResultSrc("apple"); return; }
+    let cancelled = false;
     const t = setTimeout(async () => {
       setSearching(true);
-      try {
-        const r = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=album&limit=24`);
-        const j = await r.json();
-        setResults(j.results.map((a: any) => ({ id: a.collectionId, name: a.collectionName, artist: a.artistName, art: big(a.artworkUrl100) })));
-      } catch { setResults([]); }
-      setSearching(false);
+      let found: Album[] = [];
+      let src: "apple" | "deezer" = searchIn === "deezer" ? "deezer" : "apple";
+      if (src === "apple") {
+        try {
+          const r = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=album&limit=24`);
+          const j = await r.json();
+          found = j.results.map((a: any) => ({ id: a.collectionId, name: a.collectionName, artist: a.artistName, art: big(a.artworkUrl100) }));
+        } catch {}
+      }
+      // Apple's album search has gaps; in Auto, fall back to Deezer when it finds nothing.
+      if (searchIn === "deezer" || (searchIn === "auto" && !found.length)) {
+        found = await searchDeezerAlbums({ data: { q } }).catch(() => []);
+        src = "deezer";
+      }
+      if (cancelled) return;
+      setResults(found); setResultSrc(src); setSearching(false);
     }, 350);
-    return () => clearTimeout(t);
-  }, [q]);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [q, searchIn]);
+
+  const chooseSearchIn = (s: SearchIn) => {
+    setSearchIn(s);
+    try { localStorage.setItem(SEARCH_IN, s); } catch {}
+  };
 
   const [copied, setCopied] = useState(false);
   const share = async () => {
@@ -138,9 +175,24 @@ function Index() {
               <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Artist or album…"
                 className="w-full rounded-lg border border-input bg-background py-2.5 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-ring" />
             </div>
+            <div role="radiogroup" aria-label="Search in" className="mt-2 flex items-center gap-1 text-xs">
+              <span className="mr-1 text-muted-foreground">Search</span>
+              {SEARCH_OPTIONS.map((o) => (
+                <button key={o.id} role="radio" aria-checked={searchIn === o.id} onClick={() => chooseSearchIn(o.id)} title={o.hint}
+                  className={`rounded-full border px-2.5 py-0.5 ${searchIn === o.id ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"}`}>
+                  {o.label}
+                </button>
+              ))}
+            </div>
             <p className="mt-2 text-xs text-muted-foreground">Click a cell, then pick an album. Drag cells to reorder.</p>
             <div className="mt-4 grid max-h-56 lg:max-h-[46vh] grid-cols-4 lg:grid-cols-3 gap-2 overflow-y-auto pr-1">
-              {searching && <p className="col-span-3 text-sm text-muted-foreground">Searching…</p>}
+              {searching && <p className="col-span-full text-sm text-muted-foreground">Searching…</p>}
+              {!searching && q.trim() && results.length === 0 && (
+                <p className="col-span-full text-sm text-muted-foreground">
+                  No albums found {searchIn === "auto" ? "on Apple Music or Deezer" : searchIn === "apple" ? "on Apple Music. Try Deezer or Auto." : "on Deezer. Try Apple or Auto."}
+                </p>
+              )}
+              {!searching && searchIn === "auto" && resultSrc === "deezer" && results.length > 0 && <p className="col-span-full text-xs text-muted-foreground">Not on Apple's search, showing results from Deezer.</p>}
               {results.map((a) => (
                 <button key={a.id} onClick={() => place(a)} title={`${a.name} — ${a.artist}`}
                   className="group relative aspect-square overflow-hidden rounded-md">
@@ -149,6 +201,11 @@ function Index() {
                 </button>
               ))}
             </div>
+            {!searching && q.trim() && searchIn === "auto" && resultSrc === "apple" && results.length > 0 && (
+              <button onClick={() => chooseSearchIn("deezer")} className="mt-3 text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
+                Can't find it? Search Deezer instead
+              </button>
+            )}
           </div>
 
           <div className="space-y-4 rounded-2xl border border-border bg-card p-5 text-sm">
@@ -263,7 +320,7 @@ function SongPicker({ idx, cell, onClose, onPick, player }: {
   useEffect(() => {
     if (!cell) return;
     setTracks(null); setChosen(null); setNote(cell.note ?? ""); setGenre(cell.genre ?? ""); setFff(cell.fff ?? ""); setSuggestedGenre(undefined);
-    fetchAlbum(cell.album.id).then((d) => {
+    fetchAlbum(cell.album).then((d) => {
       const list = d.tracks.filter((t) => t.preview);
       setTracks(list);
       setSuggestedGenre(d.genre);
@@ -321,7 +378,7 @@ function SongPicker({ idx, cell, onClose, onPick, player }: {
                     className="mt-2 w-full rounded-lg border border-input bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring" />
                 </label>
               </div>
-              <button onClick={() => onPick(chosen ? { id: chosen.id, name: chosen.name, preview: chosen.preview, start: 0 } : undefined, { note: note.trim(), genre: genre.trim(), fff: splitFff(fff).join(", ") })}
+              <button onClick={() => onPick(chosen ? { id: chosen.id, name: chosen.name, preview: chosen.preview, start: 0, ...(chosen.src ? { src: chosen.src } : {}) } : undefined, { note: note.trim(), genre: genre.trim(), fff: splitFff(fff).join(", ") })}
                 className="w-full rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">Save</button>
             </div>
           </>

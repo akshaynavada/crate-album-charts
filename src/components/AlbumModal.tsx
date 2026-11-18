@@ -3,7 +3,7 @@ import { ExternalLink, Music2, Pause, Play } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { Cell } from "@/lib/chart-types";
 import { albumLinks, fetchAlbum, splitFff, type AlbumDetails } from "@/lib/itunes";
-import type { usePlayer } from "@/lib/use-player";
+import { canPlay, type usePlayer } from "@/lib/use-player";
 import { useCrateTheme } from "@/components/ThemeScope";
 
 /** Shared-view album detail: the creator's note, every track's preview, and links out to streaming stores. */
@@ -18,14 +18,14 @@ export function AlbumModal({ cell, index, onClose, player }: {
   useEffect(() => {
     if (!cell) return;
     setDetails(null); setFailed(false);
-    fetchAlbum(cell.album.id).then(setDetails).catch(() => setFailed(true));
+    fetchAlbum(cell.album).then(setDetails).catch(() => setFailed(true));
   }, [cell?.album.id]);
 
   if (!cell) return null;
   const hooked = cell.track;
   // The hooked song shares the grid cell's key so a clip started by hovering keeps playing in here.
   const keyFor = (id: number | string) => (hooked && id === hooked.id ? `cell-${index}` : `trk-${id}`);
-  const links = albumLinks(cell.album, details?.appleUrl);
+  const links = albumLinks(cell.album, details);
   const fff = splitFff(cell.fff);
 
   return (
@@ -62,7 +62,7 @@ export function AlbumModal({ cell, index, onClose, player }: {
               </div>
             )}
 
-            {hooked?.preview && (
+            {hooked && canPlay(hooked) && (
               <button onClick={() => player.play(keyFor(hooked.id), hooked)}
                 className="flex items-center gap-3 rounded-lg bg-accent px-3 py-2.5 text-left text-sm hover:bg-accent/80">
                 {player.playing === keyFor(hooked.id) ? <Pause className="h-5 w-5 shrink-0" /> : <Play className="h-5 w-5 shrink-0" />}
@@ -96,7 +96,7 @@ export function AlbumModal({ cell, index, onClose, player }: {
                   );
                 })}
               </ol>
-              {details && <p className="mt-2 text-[11px] text-muted-foreground">30-second previews from Apple Music.</p>}
+              {details && <p className="mt-2 text-[11px] text-muted-foreground">30-second previews from {cell.album.src === "deezer" ? "Deezer" : "Apple Music"}.</p>}
             </div>
 
             <div>

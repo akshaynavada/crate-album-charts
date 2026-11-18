@@ -158,7 +158,8 @@ const fromHsl = (h: number, s: number, l: number) => {
  * image URL so a cached non-CORS response for the big cover can't taint the canvas.
  */
 export async function paletteFromCover(art: string): Promise<Palette> {
-  const src = art.replace(/\/\d+x\d+bb\./, "/64x64bb.");
+  // Apple: .../600x600bb.jpg   Deezer: .../1000x1000-000000-80-0-0.jpg
+  const src = art.replace(/\/\d+x\d+bb\./, "/64x64bb.").replace(/\/\d+x\d+-(\d+-\d+-\d+-\d+\.jpg)$/, "/64x64-$1");
   const img = new Image();
   img.crossOrigin = "anonymous";
   img.src = src;

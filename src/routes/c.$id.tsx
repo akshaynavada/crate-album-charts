@@ -5,7 +5,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AlbumModal } from "@/components/AlbumModal";
 import { getChart } from "@/lib/charts.functions";
 import type { ChartData } from "@/lib/chart-types";
-import { usePlayer } from "@/lib/use-player";
+import { canPlay, usePlayer } from "@/lib/use-player";
+import { refreshPreviews } from "@/lib/deezer-previews";
 import { parseTheme, resolveTheme } from "@/lib/theme";
 import { ThemeScope } from "@/components/ThemeScope";
 
@@ -45,6 +46,12 @@ function SharedChart() {
   const openRef = useRef<number | null>(null);
   openRef.current = open;
 
+  // Deezer preview links expire, so fetch fresh ones for this chart up front.
+  useEffect(() => {
+    const ids = (data?.cells ?? []).flatMap((c) => (c?.track?.src === "deezer" && typeof c.track.id === "number" ? [c.track.id] : []));
+    if (ids.length) refreshPreviews(ids).catch(() => {});
+  }, [data]);
+
   // Browsers block sound until the visitor clicks or taps the page once; hide the hint after that.
   useEffect(() => {
     if (!soundBlocked) return;
@@ -62,7 +69,7 @@ function SharedChart() {
   const hoverStart = (i: number, e: React.PointerEvent) => {
     if (e.pointerType !== "mouse" || openRef.current !== null) return;
     const t = cells[i]?.track;
-    if (!t?.preview) return;
+    if (!t || !canPlay(t)) return;
     if (hoverTimer.current) clearTimeout(hoverTimer.current);
     // Short delay so sweeping the mouse across the grid doesn't fire a burst of clips.
     hoverTimer.current = setTimeout(async () => {
