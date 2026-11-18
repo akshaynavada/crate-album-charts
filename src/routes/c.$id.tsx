@@ -11,6 +11,7 @@ import { parseTheme, resolveTheme } from "@/lib/theme";
 import { ThemeScope } from "@/components/ThemeScope";
 import { RankList } from "@/components/RankList";
 import { ListenBar } from "@/components/ListenBar";
+import { useBackToClose } from "@/lib/use-back-to-close";
 
 const chartQuery = (id: string) =>
   queryOptions({ queryKey: ["chart", id], queryFn: () => getChart({ data: { id } }) as Promise<ChartData | null>, refetchInterval: 15000 });
@@ -43,6 +44,7 @@ function SharedChart() {
   const player = usePlayer();
   const theme = useMemo(() => resolveTheme(parseTheme(data?.theme)), [data?.theme]);
   const [open, setOpen] = useState<number | null>(null);
+  useBackToClose(open !== null, () => { player.stop(); setOpen(null); });
   const [soundBlocked, setSoundBlocked] = useState(false);
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const openRef = useRef<number | null>(null);

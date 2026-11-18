@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { KeyRound, Search, Play, Pause, Disc3, Share2, Check, SlidersHorizontal, Pencil, Trash2 } from "lucide-react";
+import { Cloud, CloudCheck, CloudOff, Search, Play, Pause, Disc3, Share2, Check, SlidersHorizontal, Pencil, Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { usePlayer } from "@/lib/use-player";
 import { fetchAlbum, splitFff, type AlbumTrack } from "@/lib/itunes";
@@ -8,6 +8,7 @@ import { getRelatedArtists, searchDeezerAlbums } from "@/lib/deezer.functions";
 import { refreshPreviews } from "@/lib/deezer-previews";
 import { findYouTubeVideo } from "@/lib/youtube.functions";
 import { ListenBar } from "@/components/ListenBar";
+import { useBackToClose } from "@/lib/use-back-to-close";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -170,11 +171,14 @@ function Index() {
     return creating.current;
   };
   const hasAlbum = cells.some((c, i) => c && i < cols * rows);
+  const [saveFailed, setSaveFailed] = useState(false);
+  const retrySave = () => { setSaveFailed(false); ensureSaved().catch(() => setSaveFailed(true)); };
   useEffect(() => {
-    if (loaded && !shareInfo && hasAlbum && !openingLink.current) ensureSaved().catch(() => {});
+    if (loaded && !shareInfo && hasAlbum && !openingLink.current && !saveFailed) ensureSaved().catch(() => setSaveFailed(true));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded, shareInfo, hasAlbum]);
   const [editLinkOpen, setEditLinkOpen] = useState(false);
+  useBackToClose(editLinkOpen, () => setEditLinkOpen(false));
 
   const [copied, setCopied] = useState(false);
   const share = async () => {
@@ -210,6 +214,7 @@ function Index() {
   };
   const pickerCell: Cell = picker === null ? null : pending && pending.idx === picker ? { album: pending.album } : (cells[picker] ?? null);
   const closePicker = () => { stop(); setPicker(null); setPending(null); };
+  useBackToClose(picker !== null, closePicker);
   const savePick = (t: Track | undefined, extra: Required<PickDetails>) => {
     if (picker !== null && pickerCell) {
       const old = pickerCell.track;
@@ -358,10 +363,12 @@ function Index() {
                 className="flex items-center gap-2 rounded-full border border-border bg-card/70 px-3 py-2 text-sm hover:bg-muted">
                 <SlidersHorizontal className="h-4 w-4" /><span className="hidden sm:inline">Customize layout & theme</span><span className="sm:hidden">Customize</span>
               </button>
-              {shareInfo && (
-                <button onClick={() => setEditLinkOpen(true)} aria-label="Edit link" title="Your private link to keep editing this chart later"
-                  className="flex items-center gap-2 rounded-full border border-border bg-card/70 px-3 py-2 text-sm hover:bg-muted">
-                  <KeyRound className="h-4 w-4" /><span className="hidden sm:inline">Edit link</span>
+              {/* Save status; opens the private link for continuing on another device. */}
+              {(shareInfo || hasAlbum) && (
+                <button onClick={() => (shareInfo ? setEditLinkOpen(true) : saveFailed ? retrySave() : undefined)} disabled={!shareInfo && !saveFailed}
+                  title={shareInfo ? "Saved automatically. Click to continue on another device." : saveFailed ? "Couldn't save online. Click to try again." : "Saving…"}
+                  className="flex items-center gap-1.5 rounded-full border border-border bg-card/70 px-3 py-2 text-sm hover:bg-muted disabled:opacity-60">
+                  {shareInfo ? <><CloudCheck className="h-4 w-4" />Saved</> : saveFailed ? <><CloudOff className="h-4 w-4" />Retry save</> : <><Cloud className="h-4 w-4 animate-pulse" />Saving…</>}
                 </button>
               )}
               <button onClick={share} className="flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
@@ -379,14 +386,14 @@ function Index() {
                     data-dragging={touchDrag?.from === i ? "" : undefined} data-dragover={touchDrag && touchDrag.over === i && touchDrag.from !== i ? "" : undefined}
                     onDragStart={() => (drag.current = i)} onDragOver={(e) => e.preventDefault()}
                     onDrop={() => { if (drag.current !== null) swap(drag.current, i); drag.current = null; }}
-                    onClick={() => (c ? (c.track ? play(key, c.track) : setPicker(i)) : pickSpot(i))}
+                    onClick={() => (c ? setPicker(i) : pickSpot(i))}
                     className={`crate-cell group relative aspect-square cursor-pointer overflow-hidden ${c ? "" : "border border-dashed"} ${selected === i && !c ? "border-primary bg-accent" : "border-border bg-muted/40 hover:bg-muted"}`}>
                     {c ? (
                       <>
                         <img src={c.album.art} alt={c.album.name} draggable={false} className={`crate-cover h-full w-full object-cover ${isPlaying ? "scale-105" : ""}`} />
                         <div className={`crate-overlay absolute inset-0 flex flex-col justify-end bg-background/70 p-2 transition ${isPlaying ? "opacity-100" : "opacity-0 [@media(hover:hover)]:group-hover:opacity-100"}`}>
                           <div className="flex items-end gap-2">
-                            {c.track ? (isPlaying ? <Pause className="h-6 w-6 shrink-0 text-primary" /> : <Play className="h-6 w-6 shrink-0 text-primary" />) : null}
+                            {isPlaying ? <Pause className="h-6 w-6 shrink-0 text-primary" /> : null}
                             <p className="line-clamp-2 min-w-0 text-xs leading-tight"><span className="font-medium">{c.album.artist}</span> — {c.album.name}</p>
                           </div>
                         </div>
@@ -399,10 +406,6 @@ function Index() {
                           className="crate-btn-r absolute right-1.5 top-1.5 z-[3] hidden [@media(hover:hover)]:grid h-7 w-7 place-items-center rounded-full bg-destructive text-destructive-foreground shadow transition hover:bg-destructive/85 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100">
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
-                        {/* Faint play button: this album has a song and tapping it plays. */}
-                        {c.track && !isPlaying && (
-                          <span aria-hidden className="crate-playhint pointer-events-none absolute left-1/2 top-1/2 z-[2] grid aspect-square w-[30%] min-w-7 max-w-14 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-black/25 text-white/90 ring-1 ring-white/35 backdrop-blur-[2px] transition-opacity [@media(hover:hover)]:group-hover:opacity-0"><Play className="ml-[8%] h-1/2 w-1/2 fill-current" /></span>
-                        )}
                         {isPlaying && (
                           <span className="crate-badge absolute bottom-2 left-2 flex h-4 items-end gap-0.5">
                             {[0, 0.2, 0.4].map((d) => <span key={d} className="eq-bar w-1 h-full rounded bg-primary" style={{ animationDelay: `${d}s` }} />)}

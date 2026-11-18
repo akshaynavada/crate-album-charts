@@ -24,9 +24,9 @@ export function EditLinkDialog({ open, onOpenChange, url }: { open: boolean; onO
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle className="font-display text-2xl font-normal">Keep editing later</DialogTitle>
+          <DialogTitle className="font-display text-2xl font-normal">Your chart is saved</DialogTitle>
           <DialogDescription>
-            Your chart saves automatically in this browser. To get back to it on another device, or if this browser forgets it, open this private link.
+            Every change saves automatically, and this browser will remember it. To keep editing on another device, or if this browser forgets it, open your private edit link.
           </DialogDescription>
         </DialogHeader>
         <input readOnly value={url} onFocus={(e) => e.target.select()} aria-label="Private edit link"

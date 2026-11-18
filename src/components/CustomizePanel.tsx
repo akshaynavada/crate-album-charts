@@ -7,6 +7,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useFontLink } from "@/components/ThemeScope";
+import { useBackToClose } from "@/lib/use-back-to-close";
 import {
   ACCENT_SWATCHES, FONTS, FONT_IDS, GRID_STYLES, PRESETS, PRESET_IDS, STYLE_KEYS, paletteFromCover, swatchFontsHref,
   type CrateTheme, type ListSettings, type Palette, type PresetId, type ResolvedTheme,
@@ -44,6 +45,7 @@ export function CustomizePanel(p: Props) {
   // Closing (X, Esc or Discard) throws changes away, so ask first when there are any.
   const [confirming, setConfirming] = useState(false);
   const requestClose = () => (dirty ? setConfirming(true) : p.onOpenChange(false));
+  useBackToClose(p.open, requestClose);
   const [tab, setTab] = useState<"layout" | "theme" | "style">("layout");
 
   // Functional updates so quick successive clicks never overwrite each other.
