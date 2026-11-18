@@ -77,7 +77,6 @@ function Index() {
   const resolved = useMemo(() => resolveTheme(theme), [theme]);
   const player = usePlayer();
   const { playing, play, stop } = player;
-  const drag = useRef<number | null>(null);
 
   useEffect(() => {
     try {
@@ -257,7 +256,7 @@ function Index() {
     return n;
   });
 
-  // Touch reordering: mobile browsers don't support HTML drag-and-drop, so hold an album for a moment,
+  // Reordering (touch and mouse): mobile browsers don't support HTML drag-and-drop, so hold an album for a moment,
   // slide it onto another spot and let go to move it there. A quick swipe still scrolls the page.
   const gridRef = useRef<HTMLDivElement>(null);
   const [touchDrag, setTouchDrag] = useState<{ from: number; over: number | null; x: number; y: number; size: number } | null>(null);
@@ -293,14 +292,47 @@ function Index() {
       }
       reset();
     };
+    // Mouse: same lifted-cover drag, starting once the pointer moves a few pixels (a plain click still opens the album).
+    let suppressClick = false;
+    const onMouseDown = (e: PointerEvent) => {
+      if (e.pointerType !== "mouse" || e.button !== 0) return;
+      const el = (e.target as HTMLElement).closest<HTMLElement>(".crate-cell[data-filled]");
+      if (!el || (e.target as HTMLElement).closest("button")) return;
+      from = Number(el.dataset["index"]); startX = e.clientX; startY = e.clientY; size = el.getBoundingClientRect().width;
+      window.addEventListener("pointermove", onMouseMove);
+      window.addEventListener("pointerup", onMouseUp, { once: true });
+    };
+    const onMouseMove = (e: PointerEvent) => {
+      if (from === null) return;
+      if (!active) {
+        if (Math.hypot(e.clientX - startX, e.clientY - startY) < 6) return;
+        active = true;
+      }
+      e.preventDefault();
+      over = cellAt(e.clientX, e.clientY);
+      setTouchDrag({ from, over, x: e.clientX, y: e.clientY, size });
+    };
+    const onMouseUp = () => {
+      window.removeEventListener("pointermove", onMouseMove);
+      if (active) {
+        suppressClick = true; // the click that follows a drag shouldn't open the album
+        if (from !== null && over !== null && over !== from) moveRef.current(from, over);
+      }
+      reset();
+    };
+    const onClickCapture = (e: MouseEvent) => { if (suppressClick) { suppressClick = false; e.stopPropagation(); e.preventDefault(); } };
     grid.addEventListener("touchstart", onStart, { passive: true });
     grid.addEventListener("touchmove", onMove, { passive: false });
     grid.addEventListener("touchend", onEnd, { passive: false });
     grid.addEventListener("touchcancel", reset);
+    grid.addEventListener("pointerdown", onMouseDown);
+    grid.addEventListener("click", onClickCapture, true);
     return () => {
       reset();
       grid.removeEventListener("touchstart", onStart); grid.removeEventListener("touchmove", onMove);
       grid.removeEventListener("touchend", onEnd); grid.removeEventListener("touchcancel", reset);
+      grid.removeEventListener("pointerdown", onMouseDown); grid.removeEventListener("click", onClickCapture, true);
+      window.removeEventListener("pointermove", onMouseMove); window.removeEventListener("pointerup", onMouseUp);
     };
   }, [loaded]);
   const moveRef = useRef(moveTo);
@@ -394,10 +426,8 @@ function Index() {
                 const key = `cell-${i}`;
                 const isPlaying = playing === key;
                 return (
-                  <div key={i} draggable={!!c} data-index={i} data-filled={c ? "" : undefined} data-playing={isPlaying ? "" : undefined}
+                  <div key={i} data-index={i} data-filled={c ? "" : undefined} data-playing={isPlaying ? "" : undefined}
                     data-dragging={touchDrag?.from === i ? "" : undefined} data-dragover={touchDrag && touchDrag.over === i && touchDrag.from !== i ? "" : undefined}
-                    onDragStart={() => (drag.current = i)} onDragOver={(e) => e.preventDefault()}
-                    onDrop={() => { if (drag.current !== null) moveTo(drag.current, i); drag.current = null; }}
                     onClick={() => (c ? setPicker(i) : pickSpot(i))}
                     className={`crate-cell group relative aspect-square cursor-pointer overflow-hidden ${c ? "" : "border border-dashed"} ${selected === i && !c ? "border-primary bg-accent" : "border-border bg-muted/40 hover:bg-muted"}`}>
                     {c ? (
