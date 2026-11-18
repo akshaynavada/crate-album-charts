@@ -238,3 +238,7 @@ body { font-family: var(--font-sans); background-image: var(--gradient-glow); ba
 @media (prefers-reduced-motion: reduce) {
   .crate-cell, [data-grid] .crate-cell { rotate: 0deg !important; animation: none !important; transition: none !important; }
 }
+
+/* Touch reordering (editor): the album being held, and the spot it will swap with. */
+.crate-cell[data-dragging] { opacity: 0.55; scale: 0.92; z-index: 5; }
+.crate-cell[data-dragover] { outline: 3px solid var(--primary); outline-offset: 2px; scale: 1.04; }

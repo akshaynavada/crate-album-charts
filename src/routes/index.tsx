@@ -179,6 +179,55 @@ function Index() {
   const update = (i: number, c: Cell) => setCells((p) => p.map((x, j) => (j === i ? c : x)));
   const swap = (a: number, b: number) => setCells((p) => { const n = [...p]; const t = n[a] ?? null; n[a] = n[b] ?? null; n[b] = t; return n; });
 
+  // Touch reordering: mobile browsers don't support HTML drag-and-drop, so hold an album for a moment,
+  // slide it onto another spot and let go to swap them. A quick swipe still scrolls the page.
+  const gridRef = useRef<HTMLDivElement>(null);
+  const [touchDrag, setTouchDrag] = useState<{ from: number; over: number | null } | null>(null);
+  useEffect(() => {
+    const grid = gridRef.current;
+    if (!grid) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let from: number | null = null, over: number | null = null, active = false, startX = 0, startY = 0;
+    const cellAt = (x: number, y: number) => {
+      const el = document.elementFromPoint(x, y)?.closest<HTMLElement>(".crate-cell");
+      return el && grid.contains(el) ? Number(el.dataset["index"]) : null;
+    };
+    const reset = () => { if (timer) clearTimeout(timer); timer = null; from = over = null; active = false; setTouchDrag(null); };
+    const onStart = (e: TouchEvent) => {
+      const t = e.touches[0];
+      const el = (e.target as HTMLElement).closest<HTMLElement>(".crate-cell[data-filled]");
+      if (!t || e.touches.length > 1 || !el || (e.target as HTMLElement).closest("button")) return;
+      from = Number(el.dataset["index"]); startX = t.clientX; startY = t.clientY;
+      timer = setTimeout(() => { active = true; over = from; setTouchDrag({ from: from!, over }); navigator.vibrate?.(15); }, 350);
+    };
+    const onMove = (e: TouchEvent) => {
+      const t = e.touches[0];
+      if (from === null || !t) return;
+      if (!active) { if (Math.hypot(t.clientX - startX, t.clientY - startY) > 8) reset(); return; }
+      e.preventDefault(); // stop the page scrolling while dragging
+      const i = cellAt(t.clientX, t.clientY);
+      if (i !== over) { over = i; setTouchDrag({ from, over }); }
+    };
+    const onEnd = (e: TouchEvent) => {
+      if (active) {
+        e.preventDefault(); // no tap/click after a drag
+        if (from !== null && over !== null && over !== from) swapRef.current(from, over);
+      }
+      reset();
+    };
+    grid.addEventListener("touchstart", onStart, { passive: true });
+    grid.addEventListener("touchmove", onMove, { passive: false });
+    grid.addEventListener("touchend", onEnd, { passive: false });
+    grid.addEventListener("touchcancel", reset);
+    return () => {
+      reset();
+      grid.removeEventListener("touchstart", onStart); grid.removeEventListener("touchmove", onMove);
+      grid.removeEventListener("touchend", onEnd); grid.removeEventListener("touchcancel", reset);
+    };
+  }, [loaded]);
+  const swapRef = useRef(swap);
+  swapRef.current = swap;
+
   const filled = cells.slice(0, total).map((c, i) => ({ c, i })).filter((x) => x.c);
 
   return (
@@ -210,6 +259,7 @@ function Index() {
               ))}
             </div>
             <p className="mt-2 hidden text-xs text-muted-foreground [@media(hover:hover)]:block">Click a cell, then pick an album. Drag cells to reorder.</p>
+            <p className="mt-2 text-xs text-muted-foreground [@media(hover:hover)]:hidden">Tap a spot, then pick an album. Hold an album and slide it to move it.</p>
             <div className="mt-3 grid max-h-56 empty:hidden lg:max-h-[46vh] grid-cols-4 lg:grid-cols-3 gap-2 overflow-y-auto pr-1">
               {searching && <p className="col-span-full text-sm text-muted-foreground">Searching…</p>}
               {!searching && q.trim() && results.length === 0 && (
@@ -253,19 +303,20 @@ function Index() {
             </div>
           </div>
           <div className={`flex flex-col gap-8 ${showNames && resolved.list.pos === "side" ? "lg:flex-row lg:items-start" : ""}`}>
-            <div className="crate-grid grid min-w-0 flex-1" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0,1fr))` }}>
+            <div ref={gridRef} className="crate-grid grid min-w-0 flex-1 [-webkit-touch-callout:none] select-none" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0,1fr))` }}>
               {cells.slice(0, total).map((c, i) => {
                 const key = `cell-${i}`;
                 const isPlaying = playing === key;
                 return (
                   <div key={i} draggable={!!c} data-index={i} data-filled={c ? "" : undefined} data-playing={isPlaying ? "" : undefined}
+                    data-dragging={touchDrag?.from === i ? "" : undefined} data-dragover={touchDrag && touchDrag.over === i && touchDrag.from !== i ? "" : undefined}
                     onDragStart={() => (drag.current = i)} onDragOver={(e) => e.preventDefault()}
                     onDrop={() => { if (drag.current !== null) swap(drag.current, i); drag.current = null; }}
                     onClick={() => (c ? (c.track ? play(key, c.track) : setPicker(i)) : pickSpot(i))}
                     className={`crate-cell group relative aspect-square cursor-pointer overflow-hidden ${c ? "" : "border border-dashed"} ${selected === i && !c ? "border-primary bg-accent" : "border-border bg-muted/40 hover:bg-muted"}`}>
                     {c ? (
                       <>
-                        <img src={c.album.art} alt={c.album.name} className={`crate-cover h-full w-full object-cover ${isPlaying ? "scale-105" : ""}`} />
+                        <img src={c.album.art} alt={c.album.name} draggable={false} className={`crate-cover h-full w-full object-cover ${isPlaying ? "scale-105" : ""}`} />
                         <div className={`crate-overlay absolute inset-0 flex flex-col justify-end bg-background/70 p-2 transition ${isPlaying ? "opacity-100" : "opacity-0 [@media(hover:hover)]:group-hover:opacity-100"}`}>
                           <div className="flex items-end gap-2">
                             {c.track ? (isPlaying ? <Pause className="h-6 w-6 shrink-0 text-primary" /> : <Play className="h-6 w-6 shrink-0 text-primary" />) : null}
