@@ -34,7 +34,7 @@ export function AlbumModal({ cell, index, onClose, player }: {
       {/* Desktop: square art on the left sized to the dialog height, details scroll on the right. */}
       {/* Dialogs portal out of the themed wrapper, so re-apply the crate theme here. */}
       <DialogContent {...theme.attrs} style={{ ...theme.style, ["--h" as string]: "min(86vh, 600px, 52vw)" }}
-        className="font-sans text-foreground max-h-[92vh] max-w-[calc(var(--h)+400px)] gap-0 overflow-y-auto p-0 md:overflow-hidden [&>button:last-child]:rounded-full [&>button:last-child]:bg-background/70 [&>button:last-child]:p-1.5">
+        className="font-sans text-foreground max-h-[92vh] max-sm:top-[calc(50%-1.75rem)] max-sm:max-h-[calc(100dvh-8rem)] max-w-[calc(var(--h)+400px)] gap-0 overflow-y-auto p-0 md:overflow-hidden [&>button:last-child]:rounded-full [&>button:last-child]:bg-background/70 [&>button:last-child]:p-1.5">
         <div className="grid md:h-[var(--h)] md:grid-cols-[var(--h)_minmax(0,1fr)]">
           <img src={cell.album.art} alt={`${cell.album.name} by ${cell.album.artist}`} className="aspect-square w-full object-cover sm:rounded-t-lg md:h-full md:rounded-l-lg md:rounded-tr-none" />
           <div className="flex min-w-0 flex-col gap-5 p-5 md:overflow-y-auto md:p-6">

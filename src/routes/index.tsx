@@ -341,7 +341,8 @@ function SongPicker({ idx, cell, onClose, onPick, onRemove, isNew, player }: {
   }, [idx, cell?.album.id]);
   return (
     <Dialog open={idx !== null && !!cell} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
+      {/* On phones, sit a little high so the host's corner badge never covers the buttons. */}
+      <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto max-sm:top-[calc(50%-1.75rem)] max-sm:max-h-[calc(100dvh-8rem)]">
         {cell && (
           <>
             <DialogHeader>
@@ -389,6 +390,7 @@ function SongPicker({ idx, cell, onClose, onPick, onRemove, isNew, player }: {
                   <SuggestInput value={fff} onChange={setFff} maxLength={200} suggestion={suggestedFff} fallback="Artists, comma separated" />
                 </label>
               </div>
+              <div className="sticky -bottom-6 -mx-6 space-y-2 border-t border-border bg-background px-6 pb-6 pt-3">
               <button onClick={() => onPick(chosen ? { id: chosen.id, name: chosen.name, preview: chosen.preview, start: 0, ...(chosen.src ? { src: chosen.src } : {}) } : undefined, { note: note.trim(), genre: genre.trim(), fff: splitFff(fff).join(", ") })}
                 className="w-full rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">{isNew ? "Add to chart" : "Save"}</button>
               {!isNew && (
@@ -397,6 +399,7 @@ function SongPicker({ idx, cell, onClose, onPick, onRemove, isNew, player }: {
                   <Trash2 className="h-4 w-4" />Remove from chart
                 </button>
               )}
+              </div>
             </div>
           </>
         )}
