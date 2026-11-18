@@ -5,6 +5,7 @@ import type { Cell } from "@/lib/chart-types";
 import { albumLinks, fetchAlbum, splitFff, type AlbumDetails } from "@/lib/itunes";
 import { canPlay, type usePlayer } from "@/lib/use-player";
 import { useCrateTheme } from "@/components/ThemeScope";
+import { BrandIcon } from "@/components/BrandIcon";
 
 /** Shared-view album detail: the creator's note, every track's preview, and links out to streaming stores. */
 export function AlbumModal({ cell, index, onClose, player }: {
@@ -74,7 +75,13 @@ export function AlbumModal({ cell, index, onClose, player }: {
             )}
 
             <div>
-              <h3 className="mb-2 text-xs uppercase tracking-widest text-muted-foreground">Full album</h3>
+              <h3 className="mb-2 flex items-center justify-between text-xs uppercase tracking-widest text-muted-foreground">
+                Full album
+                <span className="flex items-center gap-1 normal-case tracking-normal">
+                  <BrandIcon name={cell.album.src === "deezer" ? "Deezer" : "Apple Music"} className="h-3 w-3" />
+                  {cell.album.src === "deezer" ? "Deezer" : "Apple Music"}
+                </span>
+              </h3>
               {!details && !failed && <p className="text-sm text-muted-foreground">Loading tracks…</p>}
               {failed && <p className="text-sm text-muted-foreground">Couldn't load the tracklist.</p>}
               <ol className="space-y-0.5">
@@ -96,7 +103,7 @@ export function AlbumModal({ cell, index, onClose, player }: {
                   );
                 })}
               </ol>
-              {details && <p className="mt-2 text-[11px] text-muted-foreground">30-second previews from {cell.album.src === "deezer" ? "Deezer" : "Apple Music"}.</p>}
+              {details && <p className="mt-2 text-[11px] text-muted-foreground">30-second previews.</p>}
             </div>
 
             <div>
@@ -105,7 +112,7 @@ export function AlbumModal({ cell, index, onClose, player }: {
                 {links.map((l) => (
                   <a key={l.name} href={l.url} target="_blank" rel="noreferrer"
                     className="flex items-center justify-between gap-2 rounded-lg border border-border px-3 py-2 text-sm hover:bg-muted">
-                    {l.name}<ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span className="flex items-center gap-2"><BrandIcon name={l.name} />{l.name}</span><ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
                   </a>
                 ))}
               </div>

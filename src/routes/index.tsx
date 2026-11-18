@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Search, Music2, Play, Pause, X, Disc3, Share2, Check } from "lucide-react";
+import { Search, Music2, Play, Pause, X, Disc3, Share2, Check, SlidersHorizontal } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { usePlayer } from "@/lib/use-player";
 import { fetchAlbum, splitFff, type AlbumTrack } from "@/lib/itunes";
@@ -25,7 +25,9 @@ import type { Album, Track, Cell, PickDetails } from "@/lib/chart-types";
 import { createChart, saveChart } from "@/lib/charts.functions";
 import { DEFAULT_THEME, parseTheme, resolveTheme, type CrateTheme } from "@/lib/theme";
 import { ThemeScope } from "@/components/ThemeScope";
-import { ThemePanel } from "@/components/ThemePanel";
+import { CustomizePanel } from "@/components/CustomizePanel";
+import { RankList } from "@/components/RankList";
+import { BrandIcon } from "@/components/BrandIcon";
 const SHARE = "crate-share-v1";
 const PUBLIC_ORIGIN = "https://crate-album-charts.lovable.app";
 /**
@@ -65,6 +67,7 @@ function Index() {
   /** Which catalog the results on screen came from. */
   const [resultSrc, setResultSrc] = useState<"apple" | "deezer">("apple");
   const [picker, setPicker] = useState<number | null>(null);
+  const [customizing, setCustomizing] = useState(false);
   const [theme, setTheme] = useState<CrateTheme>(DEFAULT_THEME);
   const resolved = useMemo(() => resolveTheme(theme), [theme]);
   const player = usePlayer();
@@ -159,7 +162,8 @@ function Index() {
   const filled = cells.slice(0, total).map((c, i) => ({ c, i })).filter((x) => x.c);
 
   return (
-    <div className="min-h-screen">
+    // On wide screens, make room for the Customize pane so the live preview stays visible.
+    <div className={`min-h-screen transition-[padding] duration-300 ${customizing ? "lg:pr-[24rem]" : ""}`}>
       <header className="mx-auto flex max-w-[1600px] items-center gap-3 px-6 pt-8">
         <Disc3 className="h-7 w-7 text-primary" />
         <span className="font-display text-3xl italic">Crate</span>
@@ -214,21 +218,13 @@ function Index() {
               <input value={title} onChange={(e) => setTitle(e.target.value)}
                 className="mt-2 w-full rounded-lg border border-input bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring" />
             </label>
-            {([["Columns", cols, setCols], ["Rows", rows, setRows]] as const).map(([l, v, set]) => (
-              <label key={l} className="block">
-                <span className="flex justify-between text-xs uppercase tracking-widest text-muted-foreground"><span>{l}</span><span className="text-foreground">{v}</span></span>
-                <input type="range" min={1} max={10} value={v} onChange={(e) => set(+e.target.value)} className="mt-2 w-full accent-primary" />
-              </label>
-            ))}
-            <label className="flex items-center gap-2">
-              <input type="checkbox" checked={showNames} onChange={(e) => setShowNames(e.target.checked)} className="accent-primary" />
-              Show album list under chart
-            </label>
+            <button onClick={() => setCustomizing(true)}
+              className="flex w-full items-center justify-center gap-2 rounded-lg border border-border px-3 py-2 hover:bg-muted">
+              <SlidersHorizontal className="h-4 w-4" />Customize layout & theme
+            </button>
             <button onClick={() => { if (confirm("Clear the whole chart?")) { setCells(Array(100).fill(null)); stop(); } }}
               className="text-xs text-muted-foreground underline-offset-4 hover:text-destructive hover:underline">Clear chart</button>
           </div>
-
-          <ThemePanel theme={theme} setTheme={setTheme} resolved={resolved} covers={filled.map((x) => x.c!.album.art)} />
         </aside>
 
         <ThemeScope as="section" theme={resolved} className="overflow-hidden rounded-3xl border border-border p-4 shadow-record md:p-6">
@@ -237,12 +233,18 @@ function Index() {
               <h1 className="crate-title font-display text-5xl leading-none md:text-6xl">{title}</h1>
               {resolved.tagline && <p className="mt-3 text-sm text-muted-foreground">{resolved.tagline}</p>}
             </div>
-            <button onClick={share} className="flex shrink-0 items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
-              {copied ? <Check className="h-4 w-4" /> : <Share2 className="h-4 w-4" />}{copied ? "Link copied" : "Share"}
-            </button>
+            <div className="flex shrink-0 items-center gap-2">
+              <button onClick={() => setCustomizing(true)} aria-label="Customize" title="Customize layout & theme"
+                className="flex items-center gap-2 rounded-full border border-border bg-card/70 px-3 py-2 text-sm hover:bg-muted">
+                <SlidersHorizontal className="h-4 w-4" /><span className="hidden sm:inline">Customize</span>
+              </button>
+              <button onClick={share} className="flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
+                {copied ? <Check className="h-4 w-4" /> : <Share2 className="h-4 w-4" />}{copied ? "Link copied" : "Share"}
+              </button>
+            </div>
           </div>
-          <div className="flex flex-col gap-8">
-            <div className="crate-grid grid flex-1" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0,1fr))` }}>
+          <div className={`flex flex-col gap-8 ${showNames && resolved.list.pos === "side" ? "lg:flex-row lg:items-start" : ""}`}>
+            <div className="crate-grid grid min-w-0 flex-1" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0,1fr))` }}>
               {cells.slice(0, total).map((c, i) => {
                 const key = `cell-${i}`;
                 const isPlaying = playing === key;
@@ -281,24 +283,17 @@ function Index() {
                 );
               })}
             </div>
-            {showNames && filled.length > 0 && (
-              <ol className="grid gap-x-8 gap-y-2 text-sm sm:grid-cols-2">
-                {filled.map(({ c, i }) => (
-                  <li key={i} className="flex gap-2">
-                    <span className="w-6 text-right font-display text-lg leading-5 text-primary">{i + 1}</span>
-                    <span className="min-w-0">
-                      <span className="font-medium">{c!.album.artist}</span> <span className="text-muted-foreground">— {c!.album.name}</span>
-                      {c!.track && <span className="flex items-center gap-1 truncate text-xs text-muted-foreground">♪ {c!.track.name}</span>}
-                      {c!.note && <span className="mt-0.5 block text-xs italic text-foreground/80">“{c!.note}”</span>}
-                    </span>
-                  </li>
-                ))}
-              </ol>
+            {showNames && (
+              <RankList cells={cells.slice(0, total)} list={resolved.list} onOpen={(i) => setPicker(i)}
+                onPlay={(i) => { const t = cells[i]?.track; if (t) play(`cell-${i}`, t); }} isPlaying={(i) => playing === `cell-${i}`} />
             )}
           </div>
         </ThemeScope>
       </main>
 
+      <CustomizePanel open={customizing} onOpenChange={setCustomizing} theme={theme} setTheme={setTheme} resolved={resolved}
+        covers={filled.map((x) => x.c!.album.art)} cols={cols} setCols={setCols} rows={rows} setRows={setRows}
+        showNames={showNames} setShowNames={setShowNames} />
       <SongPicker idx={picker} cell={picker !== null ? (cells[picker] ?? null) : null} player={player}
         onClose={() => { stop(); setPicker(null); }}
         onPick={(t, extra) => { if (picker !== null && cells[picker]) update(picker, { ...cells[picker]!, track: t ?? cells[picker]!.track, ...extra }); stop(); setPicker(null); }} />
@@ -338,6 +333,10 @@ function SongPicker({ idx, cell, onClose, onPick, player }: {
                 <div>
                   <DialogTitle className="font-display text-2xl font-normal">{cell.album.name}</DialogTitle>
                   <p className="text-sm text-muted-foreground">{cell.album.artist} · hook a song to this album</p>
+                  <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+                    <BrandIcon name={cell.album.src === "deezer" ? "Deezer" : "Apple Music"} className="h-3 w-3" />
+                    Tracks and previews from {cell.album.src === "deezer" ? "Deezer" : "Apple Music"}
+                  </p>
                 </div>
               </div>
             </DialogHeader>

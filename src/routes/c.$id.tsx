@@ -1,6 +1,6 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
-import { Disc3, Play, Pause, Plus } from "lucide-react";
+import { Disc3, Play, Plus } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlbumModal } from "@/components/AlbumModal";
 import { getChart } from "@/lib/charts.functions";
@@ -9,6 +9,7 @@ import { canPlay, usePlayer } from "@/lib/use-player";
 import { refreshPreviews } from "@/lib/deezer-previews";
 import { parseTheme, resolveTheme } from "@/lib/theme";
 import { ThemeScope } from "@/components/ThemeScope";
+import { RankList } from "@/components/RankList";
 
 const chartQuery = (id: string) =>
   queryOptions({ queryKey: ["chart", id], queryFn: () => getChart({ data: { id } }) as Promise<ChartData | null>, refetchInterval: 15000 });
@@ -63,7 +64,6 @@ function SharedChart() {
 
   if (!data) return null;
   const cells = data.cells.slice(0, data.cols * data.rows);
-  const filled = cells.map((c, i) => ({ c, i })).filter((x) => x.c);
   const cellKey = (i: number) => `cell-${i}`;
 
   const hoverStart = (i: number, e: React.PointerEvent) => {
@@ -102,58 +102,43 @@ function SharedChart() {
           <span className="hidden [@media(hover:hover)]:inline">Hover over an album to hear the song picked for it. Click to open the album.</span>
           <span className="[@media(hover:hover)]:hidden">Tap an album to hear its songs.</span>
         </p>
-        <div className="crate-grid grid" style={{ gridTemplateColumns: `repeat(${data.cols}, minmax(0,1fr))` }}>
-          {cells.map((c, i) => {
-            const isPlaying = player.playing === cellKey(i);
-            return (
-              <div key={i} data-index={i} data-filled={c ? "" : undefined} data-playing={isPlaying ? "" : undefined}
-                role={c ? "button" : undefined} tabIndex={c ? 0 : undefined}
-                aria-label={c ? `Open ${c.album.name} by ${c.album.artist}` : undefined}
-                onPointerEnter={(e) => hoverStart(i, e)} onPointerLeave={() => hoverEnd(i)}
-                onClick={() => c && setOpen(i)}
-                onKeyDown={(e) => { if (c && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); setOpen(i); } }}
-                className={`crate-cell group relative aspect-square overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-ring ${c ? "cursor-pointer" : "bg-muted/40"}`}>
-                {c && (
-                  <>
-                    <img src={c.album.art} alt="" className={`crate-cover h-full w-full object-cover transition duration-300 ${isPlaying ? "scale-105" : ""}`} />
-                    <div className={`absolute inset-0 flex flex-col justify-end bg-gradient-to-t from-background/90 via-background/30 to-transparent p-2 transition ${isPlaying ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100"}`}>
-                      {c.track && (
-                        <div className="flex items-end gap-2">
-                          {isPlaying ? (
-                            <span className="flex h-4 shrink-0 items-end gap-0.5">
-                              {[0, 0.2, 0.4].map((d) => <span key={d} className="eq-bar h-full w-1 rounded bg-primary" style={{ animationDelay: `${d}s` }} />)}
-                            </span>
-                          ) : <Play className="h-4 w-4 shrink-0" />}
-                          <p className="line-clamp-2 text-xs leading-tight">{c.track.name}</p>
-                        </div>
-                      )}
-                    </div>
-                  </>
-                )}
-              </div>
-            );
-          })}
-        </div>
-        {data.showNames && filled.length > 0 && (
-          <ol className="mt-10 grid gap-x-8 gap-y-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
-            {filled.map(({ c, i }) => (
-              <li key={i} className="flex gap-2">
-                <span className="w-6 text-right font-display text-lg leading-5">{i + 1}</span>
-                <span className="min-w-0">
-                  <button onClick={() => setOpen(i)} className="text-left hover:underline">
-                    <span className="font-medium">{c!.album.artist}</span> <span className="text-muted-foreground">— {c!.album.name}</span>
-                  </button>
-                  {c!.track && (
-                    <button onClick={() => toggle(i)} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-                      {player.playing === cellKey(i) ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}{c!.track.name}
-                    </button>
+        <div className={`flex flex-col gap-10 ${data.showNames && theme.list.pos === "side" ? "lg:flex-row lg:items-start" : ""}`}>
+          <div className="crate-grid grid min-w-0 flex-1" style={{ gridTemplateColumns: `repeat(${data.cols}, minmax(0,1fr))` }}>
+            {cells.map((c, i) => {
+              const isPlaying = player.playing === cellKey(i);
+              return (
+                <div key={i} data-index={i} data-filled={c ? "" : undefined} data-playing={isPlaying ? "" : undefined}
+                  role={c ? "button" : undefined} tabIndex={c ? 0 : undefined}
+                  aria-label={c ? `Open ${c.album.name} by ${c.album.artist}` : undefined}
+                  onPointerEnter={(e) => hoverStart(i, e)} onPointerLeave={() => hoverEnd(i)}
+                  onClick={() => c && setOpen(i)}
+                  onKeyDown={(e) => { if (c && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); setOpen(i); } }}
+                  className={`crate-cell group relative aspect-square overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-ring ${c ? "cursor-pointer" : "bg-muted/40"}`}>
+                  {c && (
+                    <>
+                      <img src={c.album.art} alt="" className={`crate-cover h-full w-full object-cover transition duration-300 ${isPlaying ? "scale-105" : ""}`} />
+                      <div className={`absolute inset-0 flex flex-col justify-end bg-gradient-to-t from-background/90 via-background/30 to-transparent p-2 transition ${isPlaying ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100"}`}>
+                        {c.track && (
+                          <div className="flex items-end gap-2">
+                            {isPlaying ? (
+                              <span className="flex h-4 shrink-0 items-end gap-0.5">
+                                {[0, 0.2, 0.4].map((d) => <span key={d} className="eq-bar h-full w-1 rounded bg-primary" style={{ animationDelay: `${d}s` }} />)}
+                              </span>
+                            ) : <Play className="h-4 w-4 shrink-0" />}
+                            <p className="line-clamp-2 text-xs leading-tight">{c.track.name}</p>
+                          </div>
+                        )}
+                      </div>
+                    </>
                   )}
-                  {c!.note && <span className="mt-0.5 block text-xs italic text-foreground/80">“{c!.note}”</span>}
-                </span>
-              </li>
-            ))}
-          </ol>
-        )}
+                </div>
+              );
+            })}
+          </div>
+          {data.showNames && (
+            <RankList cells={cells} list={theme.list} onOpen={(i) => setOpen(i)} onPlay={toggle} isPlaying={(i) => player.playing === cellKey(i)} />
+          )}
+        </div>
       </main>
       <AlbumModal index={open} cell={open !== null ? (cells[open] ?? null) : null} player={player}
         onClose={() => { player.stop(); setOpen(null); }} />
