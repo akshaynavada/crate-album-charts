@@ -18,6 +18,7 @@ type Props = {
   cols: number; setCols: (n: number) => void; rows: number; setRows: (n: number) => void;
   showNames: boolean; setShowNames: (b: boolean) => void;
   onClear: () => void;
+  title: string; setTitle: (t: string) => void;
 };
 
 /** Side pane with everything about how the crate looks: layout, album list, theme, colours and style. */
@@ -28,15 +29,15 @@ export function CustomizePanel(p: Props) {
   const [matchError, setMatchError] = useState<string | null>(null);
 
   // Everything as it was when the pane opened, so Discard can put it back.
-  type Snap = { theme: CrateTheme; cols: number; rows: number; showNames: boolean };
+  type Snap = { title: string; theme: CrateTheme; cols: number; rows: number; showNames: boolean };
   const [snap, setSnap] = useState<Snap | null>(null);
   useEffect(() => {
-    if (p.open) setSnap({ theme, cols: p.cols, rows: p.rows, showNames: p.showNames });
+    if (p.open) setSnap({ title: p.title, theme, cols: p.cols, rows: p.rows, showNames: p.showNames });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [p.open]);
-  const dirty = !!snap && JSON.stringify(snap) !== JSON.stringify({ theme, cols: p.cols, rows: p.rows, showNames: p.showNames });
+  const dirty = !!snap && JSON.stringify(snap) !== JSON.stringify({ title: p.title, theme, cols: p.cols, rows: p.rows, showNames: p.showNames });
   const discard = () => {
-    if (snap) { setTheme(snap.theme); p.setCols(snap.cols); p.setRows(snap.rows); p.setShowNames(snap.showNames); }
+    if (snap) { p.setTitle(snap.title); setTheme(snap.theme); p.setCols(snap.cols); p.setRows(snap.rows); p.setShowNames(snap.showNames); }
     setConfirming(false);
     p.onOpenChange(false);
   };
@@ -99,6 +100,15 @@ export function CustomizePanel(p: Props) {
 
         <div className="space-y-7 px-5 pb-10 pt-5 text-sm">
           {tab === "layout" && <>
+          <Section title="Title">
+            <input value={p.title} onChange={(e) => p.setTitle(e.target.value)} maxLength={80} aria-label="Chart title"
+              onBlur={() => { if (!p.title.trim()) p.setTitle("My Top Albums"); }}
+              className="w-full rounded-lg border border-input bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring" />
+            <input value={theme.tagline ?? ""} onChange={(e) => set({ tagline: e.target.value || undefined })} maxLength={120} aria-label="Tagline"
+              placeholder="Tagline (optional): Songs for the drive home…"
+              className="w-full rounded-lg border border-input bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring" />
+          </Section>
+
           <Section title="Grid size">
             {([["Columns", p.cols, p.setCols], ["Rows", p.rows, p.setRows]] as const).map(([l, v, setV]) => (
               <label key={l} className="block">
@@ -133,7 +143,7 @@ export function CustomizePanel(p: Props) {
             )}
           </Section>
 
-          <button onClick={p.onClear} className="text-xs text-muted-foreground underline-offset-4 hover:text-destructive hover:underline lg:hidden">Clear chart</button>
+          <button onClick={p.onClear} className="text-xs text-muted-foreground underline-offset-4 hover:text-destructive hover:underline">Clear chart</button>
           </>}
 
           {tab === "theme" && <>
@@ -166,11 +176,6 @@ export function CustomizePanel(p: Props) {
             {resolved.adjusted && <p className="text-xs text-muted-foreground">Some colours were nudged a little so text stays readable.</p>}
           </Section>
 
-          <Section title="Tagline">
-            <input value={theme.tagline ?? ""} onChange={(e) => set({ tagline: e.target.value || undefined })} maxLength={120}
-              placeholder="Songs for the drive home…"
-              className="w-full rounded-lg border border-input bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring" />
-          </Section>
           </>}
 
           {tab === "style" && (

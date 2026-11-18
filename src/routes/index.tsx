@@ -147,6 +147,16 @@ function Index() {
   };
 
   const total = cols * rows;
+  // Clicking an empty spot makes it the target for the next search pick and jumps to the search box.
+  const searchRef = useRef<HTMLInputElement>(null);
+  const pickSpot = (i: number) => {
+    setSelected(i);
+    const el = searchRef.current;
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.focus({ preventScroll: true });
+    el.select();
+  };
   const clearChart = () => { if (confirm("Clear the whole chart?")) { setCells(Array(100).fill(null)); stop(); } };
   // A search result only goes into the chart once Save is pressed in the song picker.
   const [pending, setPending] = useState<{ idx: number; album: Album } | null>(null);
@@ -186,7 +196,8 @@ function Index() {
             <label className="text-xs uppercase tracking-widest text-muted-foreground">Find albums</label>
             <div className="relative mt-2">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Artist or album…"
+              <input ref={searchRef} value={q} onChange={(e) => setQ(e.target.value)}
+                placeholder={selected < total && !cells[selected] ? `Find an album for #${selected + 1}…` : "Artist or album…"}
                 className="w-full rounded-lg border border-input bg-background py-2.5 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-ring" />
             </div>
             <div role="radiogroup" aria-label="Search in" className="mt-2 flex items-center gap-1 text-xs">
@@ -222,15 +233,6 @@ function Index() {
             )}
           </div>
 
-          {/* Wide screens only; on phones the title is edited in place and Customize sits on the chart. */}
-          <div className="hidden space-y-4 rounded-2xl border border-border bg-card p-5 text-sm lg:block">
-            <button onClick={() => setCustomizing(true)}
-              className="flex w-full items-center justify-center gap-2 rounded-lg border border-border px-3 py-2 hover:bg-muted">
-              <SlidersHorizontal className="h-4 w-4" />Customize layout & theme
-            </button>
-            <button onClick={clearChart}
-              className="text-xs text-muted-foreground underline-offset-4 hover:text-destructive hover:underline">Clear chart</button>
-          </div>
         </aside>
 
         <ThemeScope as="section" theme={resolved} className="overflow-hidden rounded-3xl border border-border p-4 shadow-record md:p-6">
@@ -240,9 +242,9 @@ function Index() {
               {resolved.tagline && <p className="mt-3 text-sm text-muted-foreground">{resolved.tagline}</p>}
             </div>
             <div className="flex shrink-0 items-center gap-2">
-              <button onClick={() => setCustomizing(true)} aria-label="Customize" title="Customize layout & theme"
+              <button onClick={() => setCustomizing(true)} aria-label="Customize layout & theme" title="Title, layout, album list and theme"
                 className="flex items-center gap-2 rounded-full border border-border bg-card/70 px-3 py-2 text-sm hover:bg-muted">
-                <SlidersHorizontal className="h-4 w-4" /><span className="hidden sm:inline">Customize</span>
+                <SlidersHorizontal className="h-4 w-4" /><span className="hidden sm:inline">Customize layout & theme</span><span className="sm:hidden">Customize</span>
               </button>
               <button onClick={share} className="flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
                 {copied ? <Check className="h-4 w-4" /> : <Share2 className="h-4 w-4" />}{copied ? "Link copied" : "Share"}
@@ -258,7 +260,7 @@ function Index() {
                   <div key={i} draggable={!!c} data-index={i} data-filled={c ? "" : undefined} data-playing={isPlaying ? "" : undefined}
                     onDragStart={() => (drag.current = i)} onDragOver={(e) => e.preventDefault()}
                     onDrop={() => { if (drag.current !== null) swap(drag.current, i); drag.current = null; }}
-                    onClick={() => (c ? (c.track ? play(key, c.track) : setPicker(i)) : setSelected(i))}
+                    onClick={() => (c ? (c.track ? play(key, c.track) : setPicker(i)) : pickSpot(i))}
                     className={`crate-cell group relative aspect-square cursor-pointer overflow-hidden ${c ? "" : "border border-dashed"} ${selected === i && !c ? "border-primary bg-accent" : "border-border bg-muted/40 hover:bg-muted"}`}>
                     {c ? (
                       <>
@@ -304,7 +306,7 @@ function Index() {
 
       <CustomizePanel open={customizing} onOpenChange={setCustomizing} theme={theme} setTheme={setTheme} resolved={resolved}
         covers={filled.map((x) => x.c!.album.art)} cols={cols} setCols={setCols} rows={rows} setRows={setRows}
-        showNames={showNames} setShowNames={setShowNames} onClear={clearChart} />
+        showNames={showNames} setShowNames={setShowNames} onClear={clearChart} title={title} setTitle={setTitle} />
       <SongPicker idx={picker} cell={pickerCell} player={player} isNew={!!pending} onClose={closePicker} onPick={savePick}
         onRemove={() => { if (picker !== null) update(picker, null); closePicker(); }} />
     </div>
