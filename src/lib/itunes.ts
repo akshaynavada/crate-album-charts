@@ -52,7 +52,7 @@ export function albumLinks(album: Album, details?: AlbumDetails | null): { name:
     ? `https://music.apple.com/us/search?term=${q}`
     : details?.appleUrl || `https://music.apple.com/album/${album.id}`;
   return [
-    { name: "Bandcamp", url: `https://bandcamp.com/search?q=${q}&item_type=a` },
+    { name: "Bandcamp", url: `https://bandcamp.com/search?q=${q}` },
     { name: "Apple Music", url: apple },
     { name: "Spotify", url: `https://open.spotify.com/search/${q}/albums` },
     { name: "YouTube", url: `https://www.youtube.com/results?search_query=${q}` },

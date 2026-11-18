@@ -1,6 +1,6 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
-import { Disc3, Play, Plus } from "lucide-react";
+import { ArrowUpRight, Disc3, Pause, Play, Plus } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlbumModal } from "@/components/AlbumModal";
 import { getChart } from "@/lib/charts.functions";
@@ -82,6 +82,19 @@ function SharedChart() {
     if (openRef.current !== null) return; // opening the modal covers the cell; keep the clip going
     if (player.playing === cellKey(i)) player.stop();
   };
+  // Touch screens have no hover, so the first tap plays the clip (like hovering) and a second tap opens the album.
+  const lastPointer = useRef<string>("mouse");
+  const tapCell = async (i: number) => {
+    const c = cells[i];
+    if (!c) return;
+    const t = c.track;
+    if (lastPointer.current !== "mouse" && t && canPlay(t) && player.playing !== cellKey(i)) {
+      const ok = await player.play(cellKey(i), t, { toggle: false });
+      if (!ok) setSoundBlocked(true);
+      return;
+    }
+    setOpen(i);
+  };
   const toggle = (i: number) => {
     const t = cells[i]?.track;
     if (t) player.play(cellKey(i), t);
@@ -100,7 +113,7 @@ function SharedChart() {
         {theme.tagline && <p className="mb-3 text-base text-foreground/80 md:text-lg">{theme.tagline}</p>}
         <p className="mb-8 text-sm text-muted-foreground">
           <span className="hidden [@media(hover:hover)]:inline">Hover over an album to hear the song picked for it. Click to open the album.</span>
-          <span className="[@media(hover:hover)]:hidden">Tap an album to hear its songs.</span>
+          <span className="[@media(hover:hover)]:hidden">Tap an album to hear the song picked for it. Tap again to open the album.</span>
         </p>
         <div className={`flex flex-col gap-10 ${data.showNames && theme.list.pos === "side" ? "lg:flex-row lg:items-start" : ""}`}>
           <div className="crate-grid grid min-w-0 flex-1" style={{ gridTemplateColumns: `repeat(${data.cols}, minmax(0,1fr))` }}>
@@ -110,8 +123,9 @@ function SharedChart() {
                 <div key={i} data-index={i} data-filled={c ? "" : undefined} data-playing={isPlaying ? "" : undefined}
                   role={c ? "button" : undefined} tabIndex={c ? 0 : undefined}
                   aria-label={c ? `Open ${c.album.name} by ${c.album.artist}` : undefined}
-                  onPointerEnter={(e) => hoverStart(i, e)} onPointerLeave={() => hoverEnd(i)}
-                  onClick={() => c && setOpen(i)}
+                  onPointerEnter={(e) => hoverStart(i, e)} onPointerLeave={(e) => { if (e.pointerType === "mouse") hoverEnd(i); }}
+                  onPointerDown={(e) => { lastPointer.current = e.pointerType; }}
+                  onClick={() => tapCell(i)}
                   onKeyDown={(e) => { if (c && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); setOpen(i); } }}
                   className={`crate-cell group relative aspect-square overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-ring ${c ? "cursor-pointer" : "bg-muted/40"}`}>
                   {c && (
@@ -126,6 +140,14 @@ function SharedChart() {
                               </span>
                             ) : <Play className="h-4 w-4 shrink-0" />}
                             <p className="line-clamp-2 text-xs leading-tight">{c.track.name}</p>
+                          </div>
+                        )}
+                        {isPlaying && (
+                          <div className="mt-1.5 flex gap-1.5 [@media(hover:hover)]:hidden">
+                            <button onClick={(e) => { e.stopPropagation(); player.stop(); }} aria-label="Pause"
+                              className="grid h-7 w-7 place-items-center rounded-full bg-card/95 shadow"><Pause className="h-3.5 w-3.5" /></button>
+                            <button onClick={(e) => { e.stopPropagation(); setOpen(i); }} aria-label={`Open ${c.album.name}`}
+                              className="flex h-7 items-center gap-1 rounded-full bg-primary px-2 text-xs font-medium text-primary-foreground shadow"><span className="hidden min-[480px]:inline">Album</span><ArrowUpRight className="h-3.5 w-3.5" /></button>
                           </div>
                         )}
                       </div>
