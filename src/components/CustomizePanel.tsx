@@ -1,5 +1,5 @@
 import { useEffect, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
-import { Check, Loader2, RotateCcw, Wand2, X } from "lucide-react";
+import { Check, Loader2, RotateCcw, Trash2, Wand2, X } from "lucide-react";
 import { HexColorPicker } from "react-colorful";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
@@ -143,7 +143,12 @@ export function CustomizePanel(p: Props) {
             )}
           </Section>
 
-          <button onClick={p.onClear} className="text-xs text-muted-foreground underline-offset-4 hover:text-destructive hover:underline">Clear chart</button>
+          <Section title="Start over">
+            <button onClick={p.onClear}
+              className="flex w-full items-center justify-center gap-2 rounded-lg border border-destructive/50 px-3 py-2 text-destructive hover:bg-destructive/10">
+              <Trash2 className="h-4 w-4" />Clear chart
+            </button>
+          </Section>
           </>}
 
           {tab === "theme" && <>
@@ -206,8 +211,9 @@ export function CustomizePanel(p: Props) {
           </Section>
           )}
         </div>
-        <div className="sticky bottom-0 z-10 flex items-center gap-2 border-t border-border bg-background/95 px-5 py-3 backdrop-blur">
-          <span className="mr-auto text-xs text-muted-foreground">{dirty ? "Unsaved changes" : "No changes yet"}</span>
+        <div className="sticky bottom-0 z-10 flex items-center gap-2 border-t border-border bg-background/95 px-5 py-3 backdrop-blur max-sm:pb-14">
+          {/* Phones: buttons sit on the left and higher up, clear of the host badge in the bottom-right corner. */}
+          <span className="mr-auto text-xs text-muted-foreground max-sm:order-last max-sm:hidden">{dirty ? "Unsaved changes" : "No changes yet"}</span>
           <button onClick={() => setConfirming(true)} disabled={!dirty}
             className="rounded-full border border-border px-4 py-1.5 text-sm hover:bg-muted disabled:opacity-40">Discard</button>
           <button onClick={() => p.onOpenChange(false)}
