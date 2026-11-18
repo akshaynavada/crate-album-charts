@@ -102,7 +102,7 @@ export function CustomizePanel(p: Props) {
           {tab === "layout" && <>
           <Section title="Title">
             <input value={p.title} onChange={(e) => p.setTitle(e.target.value)} maxLength={80} aria-label="Chart title"
-              onBlur={() => { if (!p.title.trim()) p.setTitle("My Top Albums"); }}
+              onBlur={() => p.setTitle(p.title.trim())} placeholder="Title (optional)"
               className="w-full rounded-lg border border-input bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring" />
             <input value={theme.tagline ?? ""} onChange={(e) => set({ tagline: e.target.value || undefined })} maxLength={120} aria-label="Tagline"
               placeholder="Tagline (optional): Songs for the drive home…"

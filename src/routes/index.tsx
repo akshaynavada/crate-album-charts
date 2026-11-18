@@ -141,7 +141,7 @@ function Index() {
       localStorage.setItem(SHARE, JSON.stringify(info)); setShareInfo(info);
     } else await saveChart({ data: { ...info, data } });
     const url = `${shareOrigin()}/c/${info.id}`;
-    if (navigator.share) { try { await navigator.share({ title, url }); return; } catch {} }
+    if (navigator.share) { try { await navigator.share({ title: title || "My album chart", url }); return; } catch {} }
     await navigator.clipboard.writeText(url);
     setCopied(true); setTimeout(() => setCopied(false), 2000);
   };
@@ -428,20 +428,20 @@ function SuggestInput({ value, onChange, suggestion, fallback, maxLength }: {
   );
 }
 
-/** The chart title, shown in the theme's title style; click or tap it to rename. */
+/** The chart title, shown in the theme's title style; click or tap it to rename. Optional: empty shows a faint "Add a title" here and nothing on the shared page. */
 function EditableTitle({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const [editing, setEditing] = useState(false);
   if (editing) {
     return (
       <input autoFocus value={value} maxLength={80} aria-label="Chart title"
-        onChange={(e) => onChange(e.target.value)} onBlur={() => { if (!value.trim()) onChange("My Top Albums"); setEditing(false); }}
+        onChange={(e) => onChange(e.target.value)} placeholder="Add a title (optional)" onBlur={() => { onChange(value.trim()); setEditing(false); }}
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === "Escape") (e.target as HTMLInputElement).blur(); }}
         className="w-full rounded-lg border border-input bg-background/60 px-2 py-1 font-display text-3xl leading-tight outline-none focus:ring-2 focus:ring-ring md:text-5xl" />
     );
   }
   return (
-    <h1 className="crate-title group/title cursor-text font-display text-5xl leading-none md:text-6xl" onClick={() => setEditing(true)} title="Rename">
-      {value}
+    <h1 className={`crate-title group/title cursor-text font-display leading-none ${value ? "text-5xl md:text-6xl" : "text-2xl text-muted-foreground/70"}`} onClick={() => setEditing(true)} title="Rename">
+      {value || "Add a title"}
       <Pencil className="ml-2 inline h-4 w-4 align-baseline text-muted-foreground opacity-60 transition group-hover/title:opacity-100" aria-hidden />
       <span className="sr-only">(rename)</span>
     </h1>

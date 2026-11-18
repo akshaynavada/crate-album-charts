@@ -23,9 +23,9 @@ export const Route = createFileRoute("/c/$id")({
   },
   head: ({ loaderData }) => ({
     meta: [
-      { title: `${loaderData?.title ?? "A chart"} — Crate` },
+      { title: `${loaderData?.title || "An album chart"} — Crate` },
       { name: "description", content: "An album chart with song previews, made on Crate." },
-      { property: "og:title", content: `${loaderData?.title ?? "A chart"} — Crate` },
+      { property: "og:title", content: `${loaderData?.title || "An album chart"} — Crate` },
       { property: "og:description", content: "Listen to the songs behind every album pick." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -114,7 +114,7 @@ function SharedChart() {
         </Link>
       </header>
       <main className="mx-auto max-w-[1400px] px-4 py-8 md:px-6">
-        <h1 className="crate-title mb-2 font-display text-5xl leading-none md:text-7xl">{data.title}</h1>
+        {data.title && <h1 className="crate-title mb-2 font-display text-5xl leading-none md:text-7xl">{data.title}</h1>}
         {theme.tagline && <p className="mb-2 text-base text-foreground/80 md:text-lg">{theme.tagline}</p>}
         <div className={`mt-8 flex flex-col gap-10 ${data.showNames && theme.list.pos === "side" ? "lg:flex-row lg:items-start" : ""}`}>
           <div className="crate-grid grid min-w-0 flex-1" style={{ gridTemplateColumns: `repeat(${data.cols}, minmax(0,1fr))` }}>
