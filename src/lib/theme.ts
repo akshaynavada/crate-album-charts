@@ -89,7 +89,7 @@ export type ListSettings = {
 export const DEFAULT_LIST: ListSettings = { pos: "side", num: "paren", size: "md", song: false, note: false, genre: false, fff: false, top: 0 };
 export type CoverSize = "sm" | "md" | "lg";
 export const COVER_SIZES: Record<CoverSize, { label: string; px: string; share: string }> = {
-  sm: { label: "S", px: "140px", share: "30%" }, md: { label: "M", px: "200px", share: "45%" }, lg: { label: "L", px: "270px", share: "100%" },
+  sm: { label: "S", px: "110px", share: "30%" }, md: { label: "M", px: "160px", share: "45%" }, lg: { label: "L", px: "260px", share: "100%" },
 };
 export const formatRank = (n: number, style: ListNum) =>
   style === "paren" ? `${n})` : style === "dot" ? `${n}.` : style === "hash" ? `#${n}` : style === "pad" ? String(n).padStart(2, "0") : "";
