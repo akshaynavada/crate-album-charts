@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Search, Music2, Play, Pause, X, Disc3, Share2, Check } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { usePlayer } from "@/lib/use-player";
-import { fetchAlbum, type AlbumTrack } from "@/lib/itunes";
+import { fetchAlbum, splitFff, type AlbumTrack } from "@/lib/itunes";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -19,7 +19,7 @@ export const Route = createFileRoute("/")({
   component: Index,
 });
 
-import type { Album, Track, Cell } from "@/lib/chart-types";
+import type { Album, Track, Cell, PickDetails } from "@/lib/chart-types";
 import { createChart, saveChart } from "@/lib/charts.functions";
 const SHARE = "crate-share-v1";
 const PUBLIC_ORIGIN = "https://crate-album-charts.lovable.app";
@@ -234,25 +234,29 @@ function Index() {
 
       <SongPicker idx={picker} cell={picker !== null ? (cells[picker] ?? null) : null} player={player}
         onClose={() => { stop(); setPicker(null); }}
-        onPick={(t, note) => { if (picker !== null && cells[picker]) update(picker, { ...cells[picker]!, track: t ?? cells[picker]!.track, note }); stop(); setPicker(null); }} />
+        onPick={(t, extra) => { if (picker !== null && cells[picker]) update(picker, { ...cells[picker]!, track: t ?? cells[picker]!.track, ...extra }); stop(); setPicker(null); }} />
     </div>
   );
 }
 
 function SongPicker({ idx, cell, onClose, onPick, player }: {
-  idx: number | null; cell: Cell; onClose: () => void; onPick: (t: Track | undefined, note: string) => void;
+  idx: number | null; cell: Cell; onClose: () => void; onPick: (t: Track | undefined, extra: Required<PickDetails>) => void;
   player: ReturnType<typeof usePlayer>;
 }) {
   const { playing, play } = player;
   const [tracks, setTracks] = useState<AlbumTrack[] | null>(null);
   const [chosen, setChosen] = useState<AlbumTrack | null>(null);
   const [note, setNote] = useState("");
+  const [genre, setGenre] = useState("");
+  const [fff, setFff] = useState("");
+  const [suggestedGenre, setSuggestedGenre] = useState<string | undefined>();
   useEffect(() => {
     if (!cell) return;
-    setTracks(null); setChosen(null); setNote(cell.note ?? "");
+    setTracks(null); setChosen(null); setNote(cell.note ?? ""); setGenre(cell.genre ?? ""); setFff(cell.fff ?? ""); setSuggestedGenre(undefined);
     fetchAlbum(cell.album.id).then((d) => {
       const list = d.tracks.filter((t) => t.preview);
       setTracks(list);
+      setSuggestedGenre(d.genre);
       setChosen(list.find((t) => t.id === cell.track?.id) ?? null);
     }).catch(() => setTracks([]));
   }, [idx, cell?.album.id]);
@@ -290,7 +294,24 @@ function SongPicker({ idx, cell, onClose, onPick, player }: {
                 <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={280} rows={2} placeholder="A few words about this album…"
                   className="mt-2 w-full resize-none rounded-lg border border-input bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring" />
               </label>
-              <button onClick={() => onPick(chosen ? { id: chosen.id, name: chosen.name, preview: chosen.preview, start: 0 } : undefined, note.trim())}
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block text-sm">
+                  <span className="flex items-baseline justify-between text-xs uppercase tracking-widest text-muted-foreground">
+                    <span>Genre <span className="normal-case tracking-normal">(optional)</span></span>
+                    {!genre && suggestedGenre && (
+                      <button type="button" onClick={() => setGenre(suggestedGenre)} className="normal-case tracking-normal text-foreground/70 underline-offset-2 hover:text-foreground hover:underline">Use “{suggestedGenre}”</button>
+                    )}
+                  </span>
+                  <input value={genre} onChange={(e) => setGenre(e.target.value)} maxLength={60} placeholder="e.g. Dream pop"
+                    className="mt-2 w-full rounded-lg border border-input bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring" />
+                </label>
+                <label className="block text-sm">
+                  <span className="text-xs uppercase tracking-widest text-muted-foreground">For fans of <span className="normal-case tracking-normal">(optional)</span></span>
+                  <input value={fff} onChange={(e) => setFff(e.target.value)} maxLength={200} placeholder="Artists, comma separated"
+                    className="mt-2 w-full rounded-lg border border-input bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring" />
+                </label>
+              </div>
+              <button onClick={() => onPick(chosen ? { id: chosen.id, name: chosen.name, preview: chosen.preview, start: 0 } : undefined, { note: note.trim(), genre: genre.trim(), fff: splitFff(fff).join(", ") })}
                 className="w-full rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">Save</button>
             </div>
           </>

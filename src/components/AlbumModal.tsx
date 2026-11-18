@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { ExternalLink, Music2, Pause, Play } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { Cell } from "@/lib/chart-types";
-import { albumLinks, fetchAlbum, type AlbumDetails } from "@/lib/itunes";
+import { albumLinks, fetchAlbum, splitFff, type AlbumDetails } from "@/lib/itunes";
 import type { usePlayer } from "@/lib/use-player";
 
 /** Shared-view album detail: the creator's note, every track's preview, and links out to streaming stores. */
@@ -24,6 +24,7 @@ export function AlbumModal({ cell, index, onClose, player }: {
   // The hooked song shares the grid cell's key so a clip started by hovering keeps playing in here.
   const keyFor = (id: number | string) => (hooked && id === hooked.id ? `cell-${index}` : `trk-${id}`);
   const links = albumLinks(cell.album, details?.appleUrl);
+  const fff = splitFff(cell.fff);
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -41,8 +42,21 @@ export function AlbumModal({ cell, index, onClose, player }: {
               </DialogDescription>
             </DialogHeader>
 
+            {cell.genre && (
+              <span className="-mt-2 w-fit rounded-full border border-border px-2.5 py-0.5 text-xs text-muted-foreground">{cell.genre}</span>
+            )}
+
             {cell.note && (
               <blockquote className="border-l-2 border-primary/60 pl-3 text-sm italic text-foreground/90">“{cell.note}”</blockquote>
+            )}
+
+            {fff.length > 0 && (
+              <div>
+                <h3 className="mb-2 text-xs uppercase tracking-widest text-muted-foreground">For fans of</h3>
+                <ul className="flex flex-wrap gap-1.5">
+                  {fff.map((a) => <li key={a} className="rounded-full bg-muted px-2.5 py-1 text-xs">{a}</li>)}
+                </ul>
+              </div>
             )}
 
             {hooked?.preview && (

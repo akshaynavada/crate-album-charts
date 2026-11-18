@@ -1,7 +1,7 @@
 import type { Album } from "@/lib/chart-types";
 
 export type AlbumTrack = { id: number; name: string; preview?: string | undefined; number: number; disc: number };
-export type AlbumDetails = { tracks: AlbumTrack[]; appleUrl: string; year?: string | undefined };
+export type AlbumDetails = { tracks: AlbumTrack[]; appleUrl: string; year?: string | undefined; genre?: string | undefined };
 
 const cache = new Map<number, Promise<AlbumDetails>>();
 
@@ -21,6 +21,7 @@ export function fetchAlbum(id: number): Promise<AlbumDetails> {
           tracks,
           appleUrl: coll?.collectionViewUrl ?? `https://music.apple.com/album/${id}`,
           year: coll?.releaseDate?.slice(0, 4),
+          genre: coll?.primaryGenreName,
         };
       });
     p.catch(() => cache.delete(id));
@@ -39,3 +40,6 @@ export function albumLinks(album: Album, appleUrl?: string) {
     { name: "Bandcamp", url: `https://bandcamp.com/search?q=${q}&item_type=a` },
   ];
 }
+
+/** Splits a "For Fans Of" string into artist names. */
+export const splitFff = (s?: string) => (s ?? "").split(",").map((x) => x.trim()).filter(Boolean);
