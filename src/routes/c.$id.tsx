@@ -1,6 +1,6 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
-import { ArrowUpRight, Disc3, Pause, Play, Plus } from "lucide-react";
+import { Disc3, Play, Plus } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlbumModal } from "@/components/AlbumModal";
 import { getChart } from "@/lib/charts.functions";
@@ -85,23 +85,24 @@ function SharedChart() {
     if (openRef.current !== null) return; // opening the modal covers the cell; keep the clip going
     if (player.playing === cellKey(i)) player.stop();
   };
-  // Touch screens have no hover, so the first tap plays the clip (like hovering) and a second tap opens the album.
-  const lastPointer = useRef<string>("mouse");
-  const tapCell = async (i: number) => {
+  // Clicking or tapping an album opens its window and plays the picked song (a click counts as the
+  // gesture browsers need before playing sound). Next / previous move through the picks the same way.
+  const openAlbum = async (i: number) => {
     const c = cells[i];
     if (!c) return;
+    setOpen(i);
     const t = c.track;
-    const playable = !!t && canPlay(t);
-    // Some phones (and Chrome's device emulation) report taps as mouse clicks, so also go by "no hover".
-    const touch = lastPointer.current !== "mouse" || window.matchMedia("(hover: none)").matches;
-    if (touch && playable && player.playing !== cellKey(i)) {
+    if (t && canPlay(t) && player.playing !== cellKey(i)) {
       const ok = await player.play(cellKey(i), t, { toggle: false });
       if (!ok) setSoundBlocked(true);
-      return;
-    }
-    setOpen(i);
-    // Opening an album also starts its picked song if nothing is playing yet.
-    if (playable && !player.playing) player.play(cellKey(i), t, { toggle: false }).catch(() => {});
+    } else if (!t || !canPlay(t)) player.stop();
+  };
+  const picks = cells.flatMap((c, i) => (c ? [i] : []));
+  const step = (dir: 1 | -1) => {
+    if (open === null) return;
+    const at = picks.indexOf(open);
+    const next = picks[at + dir];
+    if (next !== undefined) openAlbum(next);
   };
   const toggle = (i: number) => {
     const t = cells[i]?.track;
@@ -128,9 +129,8 @@ function SharedChart() {
                   role={c ? "button" : undefined} tabIndex={c ? 0 : undefined}
                   aria-label={c ? `Open ${c.album.name} by ${c.album.artist}` : undefined}
                   onPointerEnter={(e) => hoverStart(i, e)} onPointerLeave={(e) => { if (e.pointerType === "mouse") hoverEnd(i); }}
-                  onPointerDown={(e) => { lastPointer.current = e.pointerType; }}
-                  onClick={() => tapCell(i)}
-                  onKeyDown={(e) => { if (c && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); setOpen(i); } }}
+                  onClick={() => openAlbum(i)}
+                  onKeyDown={(e) => { if (c && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openAlbum(i); } }}
                   className={`crate-cell group relative aspect-square overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-ring ${c ? "cursor-pointer" : "bg-muted/40"}`}>
                   {c && (
                     <>
@@ -145,14 +145,6 @@ function SharedChart() {
                           ) : <Play className="h-4 w-4 shrink-0" />)}
                           <p className="line-clamp-2 min-w-0 text-xs leading-tight"><span className="font-medium">{c.album.artist}</span> — {c.album.name}</p>
                         </div>
-                        {isPlaying && (
-                          <div className="mt-1.5 flex gap-1.5 [@media(hover:hover)]:hidden">
-                            <button onClick={(e) => { e.stopPropagation(); player.stop(); }} aria-label="Pause"
-                              className="grid h-7 w-7 place-items-center rounded-full bg-card/95 shadow"><Pause className="h-3.5 w-3.5" /></button>
-                            <button onClick={(e) => { e.stopPropagation(); setOpen(i); }} aria-label={`Open ${c.album.name}`}
-                              className="flex h-7 items-center gap-1 rounded-full bg-primary px-2 text-xs font-medium text-primary-foreground shadow"><span className="hidden min-[480px]:inline">Album</span><ArrowUpRight className="h-3.5 w-3.5" /></button>
-                          </div>
-                        )}
                       </div>
                     </>
                   )}
@@ -161,13 +153,16 @@ function SharedChart() {
             })}
           </div>
           {data.showNames && (
-            <RankList cells={cells} list={theme.list} onOpen={(i) => setOpen(i)} onPlay={toggle} isPlaying={(i) => player.playing === cellKey(i)} />
+            <RankList cells={cells} list={theme.list} onOpen={(i) => openAlbum(i)} onPlay={toggle} isPlaying={(i) => player.playing === cellKey(i)} />
           )}
         </div>
         <ListenBar cells={cells} title={data.title} />
       </main>
       <AlbumModal index={open} cell={open !== null ? (cells[open] ?? null) : null} player={player}
-        onClose={() => { player.stop(); setOpen(null); }} />
+        onClose={() => { player.stop(); setOpen(null); }}
+        position={open !== null ? { at: picks.indexOf(open) + 1, of: picks.length } : null}
+        onPrev={open !== null && picks.indexOf(open) > 0 ? () => step(-1) : undefined}
+        onNext={open !== null && picks.indexOf(open) < picks.length - 1 ? () => step(1) : undefined} />
       {soundBlocked && (
         <div className="fixed bottom-4 left-1/2 z-40 -translate-x-1/2 rounded-full border border-border bg-card px-4 py-2 text-xs shadow-xl">
           Click anywhere on the page to turn on sound

@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { ExternalLink, Music2, Pause, Play } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ChevronLeft, ChevronRight, ExternalLink, Music2, Pause, Play } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { Cell } from "@/lib/chart-types";
 import { albumLinks, fetchAlbum, splitFff, type AlbumDetails } from "@/lib/itunes";
@@ -8,8 +8,10 @@ import { useCrateTheme } from "@/components/ThemeScope";
 import { BrandIcon } from "@/components/BrandIcon";
 
 /** Shared-view album detail: the creator's note, every track's preview, and links out to streaming stores. */
-export function AlbumModal({ cell, index, onClose, player }: {
+export function AlbumModal({ cell, index, onClose, player, position, onPrev, onNext }: {
   cell: Cell; index: number | null; onClose: () => void; player: ReturnType<typeof usePlayer>;
+  /** Where this pick sits among the chart's albums, for "3 of 8" and next / previous. */
+  position?: { at: number; of: number } | null; onPrev?: (() => void) | undefined; onNext?: (() => void) | undefined;
 }) {
   const theme = useCrateTheme();
   const [details, setDetails] = useState<AlbumDetails | null>(null);
@@ -22,6 +24,28 @@ export function AlbumModal({ cell, index, onClose, player }: {
     fetchAlbum(cell.album).then(setDetails).catch(() => setFailed(true));
   }, [cell?.album.id]);
 
+  // Arrow keys (desktop) and left / right swipes (phones) move between picks.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.key === "ArrowRight" && onNext) { e.preventDefault(); onNext(); }
+      if (e.key === "ArrowLeft" && onPrev) { e.preventDefault(); onPrev(); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onPrev, onNext]);
+  const touch = useRef<{ x: number; y: number } | null>(null);
+  const onTouchStart = (e: React.TouchEvent) => { const t = e.touches[0]; touch.current = t && e.touches.length === 1 ? { x: t.clientX, y: t.clientY } : null; };
+  const onTouchEnd = (e: React.TouchEvent) => {
+    const s = touch.current, t = e.changedTouches[0];
+    touch.current = null;
+    if (!s || !t) return;
+    const dx = t.clientX - s.x, dy = t.clientY - s.y;
+    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return; // mostly-vertical moves are scrolling
+    if (dx < 0) onNext?.(); else onPrev?.();
+  };
+
   if (!cell) return null;
   const hooked = cell.track;
   // The hooked song shares the grid cell's key so a clip started by hovering keeps playing in here.
@@ -33,13 +57,28 @@ export function AlbumModal({ cell, index, onClose, player }: {
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       {/* Desktop: square art on the left sized to the dialog height, details scroll on the right. */}
       {/* Dialogs portal out of the themed wrapper, so re-apply the crate theme here. */}
-      <DialogContent {...theme.attrs} style={{ ...theme.style, ["--h" as string]: "min(86vh, 600px, 52vw)" }}
+      <DialogContent {...theme.attrs} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} style={{ ...theme.style, ["--h" as string]: "min(86vh, 600px, 52vw)" }}
         className="font-sans text-foreground max-h-[92vh] max-sm:top-[calc(50%-1.75rem)] max-sm:max-h-[calc(100dvh-8rem)] max-w-[calc(var(--h)+400px)] gap-0 overflow-y-auto p-0 md:overflow-hidden [&>button:last-child]:rounded-full [&>button:last-child]:bg-background/70 [&>button:last-child]:p-1.5">
         <div className="grid md:h-[var(--h)] md:grid-cols-[var(--h)_minmax(0,1fr)]">
           <img src={cell.album.art} alt={`${cell.album.name} by ${cell.album.artist}`} className="aspect-square w-full object-cover sm:rounded-t-lg md:h-full md:rounded-l-lg md:rounded-tr-none" />
           <div className="flex min-w-0 flex-col gap-5 p-5 md:overflow-y-auto md:p-6">
             <DialogHeader className="space-y-1 text-left">
-              {index !== null && <span className="font-display text-lg text-muted-foreground">No. {index + 1}</span>}
+              {index !== null && (
+                <div className="flex items-center gap-1 text-muted-foreground">
+                  {position && position.of > 1 && (
+                    <button onClick={onPrev} disabled={!onPrev} aria-label="Previous pick" title="Previous (←)"
+                      className="-ml-1.5 grid h-8 w-8 place-items-center rounded-full hover:bg-muted hover:text-foreground disabled:opacity-30"><ChevronLeft className="h-5 w-5" /></button>
+                  )}
+                  <span className="font-display text-lg">No. {index + 1}</span>
+                  {position && position.of > 1 && (
+                    <>
+                      <button onClick={onNext} disabled={!onNext} aria-label="Next pick" title="Next (→)"
+                        className="grid h-8 w-8 place-items-center rounded-full hover:bg-muted hover:text-foreground disabled:opacity-30"><ChevronRight className="h-5 w-5" /></button>
+                      <span className="ml-1 text-xs">{position.at} of {position.of}<span className="[@media(hover:hover)]:hidden"> · swipe for more</span></span>
+                    </>
+                  )}
+                </div>
+              )}
               <DialogTitle className="font-display text-3xl font-normal leading-tight">{cell.album.name}</DialogTitle>
               <DialogDescription className="text-sm">
                 {cell.album.artist}{details?.year ? ` · ${details.year}` : ""}
