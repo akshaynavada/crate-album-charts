@@ -1,6 +1,6 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
-import { Disc3, Play, Plus } from "lucide-react";
+import { Disc3, Play, Plus, Volume2, VolumeX } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlbumModal } from "@/components/AlbumModal";
 import { getChart } from "@/lib/charts.functions";
@@ -46,6 +46,16 @@ function SharedChart() {
   const [open, setOpen] = useState<number | null>(null);
   useBackToClose(open !== null, () => { player.stop(); setOpen(null); });
   const [soundBlocked, setSoundBlocked] = useState(false);
+  // Play on hover: the creator's choice, which each visitor can flip for this chart (remembered in their browser).
+  const hoverKey = `crate-hover-play:${id}`;
+  const [hoverPref, setHoverPref] = useState<boolean | null>(null);
+  useEffect(() => { try { const v = localStorage.getItem(hoverKey); if (v === "1" || v === "0") setHoverPref(v === "1"); } catch {} }, [hoverKey]);
+  const hoverOn = hoverPref ?? theme.hoverPlay;
+  const setHover = (on: boolean) => {
+    setHoverPref(on);
+    try { localStorage.setItem(hoverKey, on ? "1" : "0"); } catch {}
+    if (!on) player.stop();
+  };
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const openRef = useRef<number | null>(null);
   openRef.current = open;
@@ -70,7 +80,7 @@ function SharedChart() {
   const cellKey = (i: number) => `cell-${i}`;
 
   const hoverStart = (i: number, e: React.PointerEvent) => {
-    if (e.pointerType !== "mouse" || openRef.current !== null) return;
+    if (e.pointerType !== "mouse" || openRef.current !== null || !hoverOn) return;
     const t = cells[i]?.track;
     if (!t || !canPlay(t)) return;
     if (hoverTimer.current) clearTimeout(hoverTimer.current);
@@ -120,7 +130,17 @@ function SharedChart() {
       <main className="mx-auto max-w-[2000px] px-4 py-8 md:px-8 2xl:px-12">
         {data.title && <h1 className="crate-title mb-2 font-display text-5xl leading-none md:text-7xl">{data.title}</h1>}
         {theme.tagline && <p className="mb-2 text-base text-foreground/80 md:text-lg">{theme.tagline}</p>}
-        <div className={`mt-8 flex flex-col gap-10 ${data.showNames && theme.list.pos === "side" ? "lg:flex-row lg:items-start" : ""}`}>
+        {/* Mouse-only: phones never play on hover. */}
+        <div className="mt-6 hidden justify-end [@media(hover:hover)]:flex">
+          <button role="switch" aria-checked={hoverOn} onClick={() => setHover(!hoverOn)}
+            className="flex items-center gap-2 rounded-full border border-border bg-card/60 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground">
+            {hoverOn ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}Play on hover
+            <span className={`relative h-4 w-7 rounded-full transition ${hoverOn ? "bg-primary" : "bg-muted-foreground/40"}`}>
+              <span className={`absolute top-0.5 h-3 w-3 rounded-full bg-background transition-all ${hoverOn ? "left-3.5" : "left-0.5"}`} />
+            </span>
+          </button>
+        </div>
+        <div className={`mt-4 flex flex-col gap-10 [@media(hover:none)]:mt-8 ${data.showNames && theme.list.pos === "side" ? "lg:flex-row lg:items-start" : ""}`}>
           <div className="crate-grid grid min-w-0 flex-1">
             {cells.map((c, i) => {
               const isPlaying = player.playing === cellKey(i);

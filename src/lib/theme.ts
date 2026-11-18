@@ -117,6 +117,8 @@ export const themeSchema = z.object({
   grain: z.boolean().optional(),
   /** How big covers are; the grid fits as many per row as the screen allows. */
   coverSize: z.enum(["sm", "md", "lg"]).optional(),
+  /** Shared page on desktop: play a pick's clip when the mouse rests on its cover (on unless turned off). */
+  hoverPlay: z.boolean().optional(),
   list: z.object({
     pos: z.enum(["below", "side"]), num: z.enum(["paren", "dot", "hash", "pad", "none"]), size: z.enum(["sm", "md", "lg"]),
     song: z.boolean(), note: z.boolean(), genre: z.boolean(), fff: z.boolean(), top: z.number().int().min(0).max(100),
@@ -150,7 +152,7 @@ function ensureContrast(c: string, bg: string, toward: string, min: number) {
 export type ResolvedTheme = {
   preset: PresetId; palette: Palette; basePalette: Palette; grid: GridStyle; adjusted: boolean; light: boolean;
   displayFont: FontId; bodyFont: FontId; titleCase: TitleCase; shape: Shape; radius: number; gap: number;
-  cover: CoverEffect; grain: boolean; list: ListSettings; coverSize: CoverSize;
+  cover: CoverEffect; grain: boolean; list: ListSettings; coverSize: CoverSize; hoverPlay: boolean;
   style: CSSProperties; attrs: Record<string, string>; fontHref: string; tagline: string;
 };
 
@@ -175,6 +177,7 @@ export function resolveTheme(input: CrateTheme | undefined): ResolvedTheme {
   const grain = t.grain ?? p.grain ?? false;
   const list = { ...DEFAULT_LIST, ...(t.list ?? {}) } as ListSettings;
   const coverSize = t.coverSize ?? "md";
+  const hoverPlay = t.hoverPlay ?? true;
   const onAccent = contrast("#0b0b0c", accent) >= contrast("#fafaf7", accent) ? "#0b0b0c" : "#fafaf7";
   const d = FONTS[displayFont], b = FONTS[bodyFont];
   const style = {
@@ -200,7 +203,7 @@ export function resolveTheme(input: CrateTheme | undefined): ResolvedTheme {
   if (grain) attrs["data-grain"] = "";
   return {
     preset: t.preset, palette, basePalette: { ...base, accent: rawAccent }, grid, light, adjusted: accent !== rawAccent || fg !== base.fg,
-    displayFont, bodyFont, titleCase, shape, radius, gap, cover, grain, list, coverSize, style, attrs,
+    displayFont, bodyFont, titleCase, shape, radius, gap, cover, grain, list, coverSize, hoverPlay, style, attrs,
     fontHref: fontsHref([displayFont, bodyFont]),
     tagline: t.tagline?.trim() ?? "",
   };

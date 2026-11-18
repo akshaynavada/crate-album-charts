@@ -156,6 +156,13 @@ export function CustomizePanel(p: Props) {
             )}
           </Section>
 
+          <Section title="Shared page">
+            <Row label="Play on hover (desktop)">
+              <Chips value={resolved.hoverPlay ? "on" : "off"} options={[["on", "On"], ["off", "Off"]]} onChange={(v) => set({ hoverPlay: v === "on" ? undefined : false })} />
+            </Row>
+            <p className="text-xs text-muted-foreground">Starts a song's clip when a visitor's mouse rests on its cover. Visitors can still switch it off.</p>
+          </Section>
+
           <Section title="Start over">
             <button onClick={p.onClear}
               className="flex w-full items-center justify-center gap-2 rounded-lg border border-destructive/50 px-3 py-2 text-destructive hover:bg-destructive/10">
