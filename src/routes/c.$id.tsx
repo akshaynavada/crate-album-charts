@@ -134,16 +134,14 @@ function SharedChart() {
                     <>
                       <img src={c.album.art} alt="" className={`crate-cover h-full w-full object-cover transition duration-300 ${isPlaying ? "scale-105" : ""}`} />
                       <div className={`crate-overlay absolute inset-0 flex flex-col justify-end bg-gradient-to-t from-background/90 via-background/30 to-transparent p-2 transition ${isPlaying ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100"}`}>
-                        {c.track && (
-                          <div className="flex items-end gap-2">
-                            {isPlaying ? (
-                              <span className="flex h-4 shrink-0 items-end gap-0.5">
-                                {[0, 0.2, 0.4].map((d) => <span key={d} className="eq-bar h-full w-1 rounded bg-primary" style={{ animationDelay: `${d}s` }} />)}
-                              </span>
-                            ) : <Play className="h-4 w-4 shrink-0" />}
-                            <p className="line-clamp-2 text-xs leading-tight">{c.track.name}</p>
-                          </div>
-                        )}
+                        <div className="flex items-end gap-2">
+                          {c.track && (isPlaying ? (
+                            <span className="flex h-4 shrink-0 items-end gap-0.5">
+                              {[0, 0.2, 0.4].map((d) => <span key={d} className="eq-bar h-full w-1 rounded bg-primary" style={{ animationDelay: `${d}s` }} />)}
+                            </span>
+                          ) : <Play className="h-4 w-4 shrink-0" />)}
+                          <p className="line-clamp-2 min-w-0 text-xs leading-tight"><span className="font-medium">{c.album.artist}</span> — {c.album.name}</p>
+                        </div>
                         {isPlaying && (
                           <div className="mt-1.5 flex gap-1.5 [@media(hover:hover)]:hidden">
                             <button onClick={(e) => { e.stopPropagation(); player.stop(); }} aria-label="Pause"
