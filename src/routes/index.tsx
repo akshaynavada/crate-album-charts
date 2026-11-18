@@ -176,7 +176,7 @@ function Index() {
                 className="w-full rounded-lg border border-input bg-background py-2.5 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-ring" />
             </div>
             <div role="radiogroup" aria-label="Search in" className="mt-2 flex items-center gap-1 text-xs">
-              <span className="mr-1 text-muted-foreground">Search</span>
+              <span className="mr-1 text-muted-foreground">Audio Source</span>
               {SEARCH_OPTIONS.map((o) => (
                 <button key={o.id} role="radio" aria-checked={searchIn === o.id} onClick={() => chooseSearchIn(o.id)} title={o.hint}
                   className={`rounded-full border px-2.5 py-0.5 ${searchIn === o.id ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"}`}>
