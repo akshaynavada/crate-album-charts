@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Search, Play, Pause, Disc3, Share2, Check, SlidersHorizontal, Pencil, Trash2 } from "lucide-react";
+import { KeyRound, Search, Play, Pause, Disc3, Share2, Check, SlidersHorizontal, Pencil, Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { usePlayer } from "@/lib/use-player";
 import { fetchAlbum, splitFff, type AlbumTrack } from "@/lib/itunes";
@@ -24,7 +24,8 @@ export const Route = createFileRoute("/")({
 });
 
 import type { Album, Track, Cell, PickDetails } from "@/lib/chart-types";
-import { createChart, saveChart } from "@/lib/charts.functions";
+import { createChart, openChartForEdit, saveChart } from "@/lib/charts.functions";
+import { EditLinkDialog, editLinkFor, readEditLink } from "@/components/EditLinkDialog";
 import { DEFAULT_THEME, parseTheme, resolveTheme, type CrateTheme } from "@/lib/theme";
 import { ThemeScope } from "@/components/ThemeScope";
 import { CustomizePanel } from "@/components/CustomizePanel";
@@ -82,10 +83,28 @@ function Index() {
       setShareInfo(JSON.parse(localStorage.getItem(SHARE) || "null"));
       const s = localStorage.getItem(SEARCH_IN);
       if (s === "auto" || s === "apple" || s === "deezer") setSearchIn(s);
-      if (d) { setTitle(d.title); setCols(d.cols); setRows(d.rows); setCells([...d.cells, ...Array(100).fill(null)].slice(0, 100)); setShowNames(d.showNames ?? true); setTheme(parseTheme(d.theme)); }
+      if (d) applyChart(d);
     } catch {}
     setLoaded(true);
+    // Opened from a private edit link (/#edit=<id>:<key>): load that chart into this browser.
+    const link = readEditLink(window.location.hash);
+    if (link) {
+      history.replaceState(null, "", window.location.pathname); // keep the key out of the address bar
+      const current = JSON.parse(localStorage.getItem(SHARE) || "null");
+      if (current?.id !== link.id && current && !confirm("Open the chart from this link? It replaces the chart in this browser (that one stays saved at its own edit link).")) return;
+      openingLink.current = true;
+      openChartForEdit({ data: link }).then((d) => {
+        if (!d) { alert("That edit link didn't work. It may be mistyped, or the chart was removed."); return; }
+        applyChart(d);
+        localStorage.setItem(SHARE, JSON.stringify(link)); setShareInfo(link);
+      }).catch(() => alert("Couldn't open that edit link. Check your connection and try again."))
+        .finally(() => { openingLink.current = false; });
+    }
   }, []);
+  function applyChart(d: any) {
+    setTitle(d.title ?? ""); setCols(d.cols); setRows(d.rows); setCells([...d.cells, ...Array(100).fill(null)].slice(0, 100));
+    setShowNames(d.showNames ?? true); setTheme(parseTheme(d.theme));
+  }
   useEffect(() => {
     if (!loaded) return;
     const ids = cells.flatMap((c) => (c?.track?.src === "deezer" && typeof c.track.id === "number" ? [c.track.id] : []));
@@ -136,14 +155,33 @@ function Index() {
     try { localStorage.setItem(SEARCH_IN, s); } catch {}
   };
 
+  // Every chart gets a saved copy (and so an edit link) as soon as it has an album; after that the autosave above keeps it current.
+  const creating = useRef<Promise<{ id: string; token: string }> | null>(null);
+  const openingLink = useRef(false);
+  const ensureSaved = () => {
+    if (shareInfo) return Promise.resolve(shareInfo);
+    if (!creating.current) {
+      const data = { title, cols, rows, showNames, cells: cells.slice(0, cols * rows), theme };
+      creating.current = createChart({ data: { data } }).then((info) => {
+        localStorage.setItem(SHARE, JSON.stringify(info)); setShareInfo(info);
+        return info;
+      }).finally(() => { creating.current = null; });
+    }
+    return creating.current;
+  };
+  const hasAlbum = cells.some((c, i) => c && i < cols * rows);
+  useEffect(() => {
+    if (loaded && !shareInfo && hasAlbum && !openingLink.current) ensureSaved().catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded, shareInfo, hasAlbum]);
+  const [editLinkOpen, setEditLinkOpen] = useState(false);
+
   const [copied, setCopied] = useState(false);
   const share = async () => {
     const data = { title, cols, rows, showNames, cells: cells.slice(0, total), theme };
-    let info = shareInfo;
-    if (!info) {
-      info = await createChart({ data: { data } });
-      localStorage.setItem(SHARE, JSON.stringify(info)); setShareInfo(info);
-    } else await saveChart({ data: { ...info, data } });
+    const hadInfo = !!shareInfo;
+    const info = await ensureSaved();
+    if (hadInfo) await saveChart({ data: { ...info, data } });
     const url = `${shareOrigin()}/c/${info.id}`;
     if (navigator.share) { try { await navigator.share({ title: title || "My album chart", url }); return; } catch {} }
     await navigator.clipboard.writeText(url);
@@ -320,6 +358,12 @@ function Index() {
                 className="flex items-center gap-2 rounded-full border border-border bg-card/70 px-3 py-2 text-sm hover:bg-muted">
                 <SlidersHorizontal className="h-4 w-4" /><span className="hidden sm:inline">Customize layout & theme</span><span className="sm:hidden">Customize</span>
               </button>
+              {shareInfo && (
+                <button onClick={() => setEditLinkOpen(true)} aria-label="Edit link" title="Your private link to keep editing this chart later"
+                  className="flex items-center gap-2 rounded-full border border-border bg-card/70 px-3 py-2 text-sm hover:bg-muted">
+                  <KeyRound className="h-4 w-4" /><span className="hidden sm:inline">Edit link</span>
+                </button>
+              )}
               <button onClick={share} className="flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
                 {copied ? <Check className="h-4 w-4" /> : <Share2 className="h-4 w-4" />}{copied ? "Link copied" : "Share"}
               </button>
@@ -388,6 +432,7 @@ function Index() {
           <p className="mt-1 truncate rounded bg-background/90 px-1.5 py-0.5 text-center text-[11px] font-medium shadow">#{touchDrag.from + 1} → {touchDrag.over !== null && touchDrag.over !== touchDrag.from ? `#${touchDrag.over + 1}` : "…"}</p>
         </div>
       )}
+      <EditLinkDialog open={editLinkOpen} onOpenChange={setEditLinkOpen} url={shareInfo ? editLinkFor(shareOrigin(), shareInfo) : ""} />
       <CustomizePanel open={customizing} onOpenChange={setCustomizing} theme={theme} setTheme={setTheme} resolved={resolved}
         covers={filled.map((x) => x.c!.album.art)} cols={cols} setCols={setCols} rows={rows} setRows={setRows}
         showNames={showNames} setShowNames={setShowNames} onClear={clearChart} title={title} setTitle={setTitle} />

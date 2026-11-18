@@ -39,3 +39,12 @@ export const getChart = createServerFn({ method: "GET" })
     const { data: row } = await supabaseAdmin.from("charts").select("data").eq("id", data.id).maybeSingle();
     return row ? (row.data as any) : null;
   });
+
+/** Opens a chart for editing from its private edit link; returns null unless the edit key matches. */
+export const openChartForEdit = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) => z.object({ id: z.string().uuid(), token: z.string().uuid() }).parse(d))
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: row } = await supabaseAdmin.from("charts").select("data").eq("id", data.id).eq("edit_token", data.token).maybeSingle();
+    return row ? (row.data as any) : null;
+  });
