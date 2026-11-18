@@ -115,12 +115,8 @@ function SharedChart() {
       </header>
       <main className="mx-auto max-w-[1400px] px-4 py-8 md:px-6">
         <h1 className="crate-title mb-2 font-display text-5xl leading-none md:text-7xl">{data.title}</h1>
-        {theme.tagline && <p className="mb-3 text-base text-foreground/80 md:text-lg">{theme.tagline}</p>}
-        <p className="mb-8 text-sm text-muted-foreground">
-          <span className="hidden [@media(hover:hover)]:inline">Hover over an album to hear the song picked for it. Click to open the album.</span>
-          <span className="[@media(hover:hover)]:hidden">Tap an album to hear the song picked for it. Tap again to open the album.</span>
-        </p>
-        <div className={`flex flex-col gap-10 ${data.showNames && theme.list.pos === "side" ? "lg:flex-row lg:items-start" : ""}`}>
+        {theme.tagline && <p className="mb-2 text-base text-foreground/80 md:text-lg">{theme.tagline}</p>}
+        <div className={`mt-8 flex flex-col gap-10 ${data.showNames && theme.list.pos === "side" ? "lg:flex-row lg:items-start" : ""}`}>
           <div className="crate-grid grid min-w-0 flex-1" style={{ gridTemplateColumns: `repeat(${data.cols}, minmax(0,1fr))` }}>
             {cells.map((c, i) => {
               const isPlaying = player.playing === cellKey(i);
