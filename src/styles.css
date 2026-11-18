@@ -212,8 +212,9 @@ body { font-family: var(--font-sans); background-image: var(--gradient-glow); ba
 [data-shape="circle"] .crate-overlay { z-index: 2; padding: 15%; text-align: center; }
 [data-shape="circle"] .crate-overlay > * { justify-content: center; }
 [data-shape="circle"] .crate-badge { inset: auto auto 15% 15%; }
-[data-shape="circle"] .crate-btn-l { inset: 10% auto auto 10%; }
-[data-shape="circle"] .crate-btn-r { inset: 10% 10% auto auto; }
+/* Circles: edit and remove sit side by side near the top centre instead of out at the clipped corners. */
+[data-shape="circle"] .crate-btn-l { inset: 12% auto auto calc(50% - 2rem); }
+[data-shape="circle"] .crate-btn-r { inset: 12% calc(50% - 2rem) auto auto; }
 /* Riso: misregistered title */
 [data-preset="riso"] .crate-title { text-shadow: 3px 3px 0 color-mix(in oklab, var(--primary) 75%, transparent); }
 /* Outrun: neon title glow and a sunset horizon line */

@@ -147,6 +147,7 @@ function Index() {
   };
 
   const total = cols * rows;
+  const clearChart = () => { if (confirm("Clear the whole chart?")) { setCells(Array(100).fill(null)); stop(); } };
   // A search result only goes into the chart once Save is pressed in the song picker.
   const [pending, setPending] = useState<{ idx: number; album: Album } | null>(null);
   const place = (album: Album) => {
@@ -173,15 +174,15 @@ function Index() {
   return (
     // On wide screens, make room for the Customize pane so the live preview stays visible.
     <div className={`min-h-screen transition-[padding] duration-300 ${customizing ? "lg:pr-[24rem]" : ""}`}>
-      <header className="mx-auto flex max-w-[1600px] items-center gap-3 px-6 pt-8">
+      <header className="mx-auto flex max-w-[1600px] items-center gap-3 px-4 pt-5 md:px-6 md:pt-8">
         <Disc3 className="h-7 w-7 text-primary" />
         <span className="font-display text-3xl italic">Crate</span>
-        <span className="ml-2 text-sm text-muted-foreground">album charts that sound like you</span>
+        <span className="ml-2 hidden text-sm text-muted-foreground sm:inline">album charts that sound like you</span>
       </header>
 
-      <main className="mx-auto grid max-w-[1600px] gap-6 px-4 py-6 md:px-6 lg:grid-cols-[300px_1fr]">
+      <main className="mx-auto grid max-w-[1600px] gap-4 px-4 py-4 md:gap-6 md:px-6 md:py-6 lg:grid-cols-[300px_1fr]">
         <aside className="space-y-6 lg:sticky lg:top-6 lg:self-start">
-          <div className="rounded-2xl border border-border bg-card p-5">
+          <div className="rounded-2xl border border-border bg-card p-4 md:p-5">
             <label className="text-xs uppercase tracking-widest text-muted-foreground">Find albums</label>
             <div className="relative mt-2">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -197,8 +198,8 @@ function Index() {
                 </button>
               ))}
             </div>
-            <p className="mt-2 text-xs text-muted-foreground">Click a cell, then pick an album. Drag cells to reorder.</p>
-            <div className="mt-4 grid max-h-56 lg:max-h-[46vh] grid-cols-4 lg:grid-cols-3 gap-2 overflow-y-auto pr-1">
+            <p className="mt-2 hidden text-xs text-muted-foreground [@media(hover:hover)]:block">Click a cell, then pick an album. Drag cells to reorder.</p>
+            <div className="mt-3 grid max-h-56 empty:hidden lg:max-h-[46vh] grid-cols-4 lg:grid-cols-3 gap-2 overflow-y-auto pr-1">
               {searching && <p className="col-span-full text-sm text-muted-foreground">Searching…</p>}
               {!searching && q.trim() && results.length === 0 && (
                 <p className="col-span-full text-sm text-muted-foreground">
@@ -221,17 +222,13 @@ function Index() {
             )}
           </div>
 
-          <div className="space-y-4 rounded-2xl border border-border bg-card p-5 text-sm">
-            <label className="block">
-              <span className="text-xs uppercase tracking-widest text-muted-foreground">Title</span>
-              <input value={title} onChange={(e) => setTitle(e.target.value)}
-                className="mt-2 w-full rounded-lg border border-input bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring" />
-            </label>
+          {/* Wide screens only; on phones the title is edited in place and Customize sits on the chart. */}
+          <div className="hidden space-y-4 rounded-2xl border border-border bg-card p-5 text-sm lg:block">
             <button onClick={() => setCustomizing(true)}
               className="flex w-full items-center justify-center gap-2 rounded-lg border border-border px-3 py-2 hover:bg-muted">
               <SlidersHorizontal className="h-4 w-4" />Customize layout & theme
             </button>
-            <button onClick={() => { if (confirm("Clear the whole chart?")) { setCells(Array(100).fill(null)); stop(); } }}
+            <button onClick={clearChart}
               className="text-xs text-muted-foreground underline-offset-4 hover:text-destructive hover:underline">Clear chart</button>
           </div>
         </aside>
@@ -239,7 +236,7 @@ function Index() {
         <ThemeScope as="section" theme={resolved} className="overflow-hidden rounded-3xl border border-border p-4 shadow-record md:p-6">
           <div className="mb-6 flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <h1 className="crate-title font-display text-5xl leading-none md:text-6xl">{title}</h1>
+              <EditableTitle value={title} onChange={setTitle} />
               {resolved.tagline && <p className="mt-3 text-sm text-muted-foreground">{resolved.tagline}</p>}
             </div>
             <div className="flex shrink-0 items-center gap-2">
@@ -307,7 +304,7 @@ function Index() {
 
       <CustomizePanel open={customizing} onOpenChange={setCustomizing} theme={theme} setTheme={setTheme} resolved={resolved}
         covers={filled.map((x) => x.c!.album.art)} cols={cols} setCols={setCols} rows={rows} setRows={setRows}
-        showNames={showNames} setShowNames={setShowNames} />
+        showNames={showNames} setShowNames={setShowNames} onClear={clearChart} />
       <SongPicker idx={picker} cell={pickerCell} player={player} isNew={!!pending} onClose={closePicker} onPick={savePick}
         onRemove={() => { if (picker !== null) update(picker, null); closePicker(); }} />
     </div>
@@ -422,5 +419,25 @@ function SuggestInput({ value, onChange, suggestion, fallback, maxLength }: {
         </button>
       )}
     </span>
+  );
+}
+
+/** The chart title, shown in the theme's title style; click or tap it to rename. */
+function EditableTitle({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [editing, setEditing] = useState(false);
+  if (editing) {
+    return (
+      <input autoFocus value={value} maxLength={80} aria-label="Chart title"
+        onChange={(e) => onChange(e.target.value)} onBlur={() => { if (!value.trim()) onChange("My Top Albums"); setEditing(false); }}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === "Escape") (e.target as HTMLInputElement).blur(); }}
+        className="w-full rounded-lg border border-input bg-background/60 px-2 py-1 font-display text-3xl leading-tight outline-none focus:ring-2 focus:ring-ring md:text-5xl" />
+    );
+  }
+  return (
+    <h1 className="crate-title group/title cursor-text font-display text-5xl leading-none md:text-6xl" onClick={() => setEditing(true)} title="Rename">
+      {value}
+      <Pencil className="ml-2 inline h-4 w-4 align-baseline text-muted-foreground opacity-60 transition group-hover/title:opacity-100" aria-hidden />
+      <span className="sr-only">(rename)</span>
+    </h1>
   );
 }

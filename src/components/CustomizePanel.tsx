@@ -17,6 +17,7 @@ type Props = {
   theme: CrateTheme; setTheme: Dispatch<SetStateAction<CrateTheme>>; resolved: ResolvedTheme; covers: string[];
   cols: number; setCols: (n: number) => void; rows: number; setRows: (n: number) => void;
   showNames: boolean; setShowNames: (b: boolean) => void;
+  onClear: () => void;
 };
 
 /** Side pane with everything about how the crate looks: layout, album list, theme, colours and style. */
@@ -132,6 +133,7 @@ export function CustomizePanel(p: Props) {
             )}
           </Section>
 
+          <button onClick={p.onClear} className="text-xs text-muted-foreground underline-offset-4 hover:text-destructive hover:underline lg:hidden">Clear chart</button>
           </>}
 
           {tab === "theme" && <>
