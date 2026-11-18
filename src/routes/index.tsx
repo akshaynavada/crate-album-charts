@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Search, Music2, Play, Pause, Disc3, Share2, Check, SlidersHorizontal, Pencil, Trash2 } from "lucide-react";
+import { Search, Play, Pause, Disc3, Share2, Check, SlidersHorizontal, Pencil, Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { usePlayer } from "@/lib/use-player";
 import { fetchAlbum, splitFff, type AlbumTrack } from "@/lib/itunes";
@@ -355,8 +355,9 @@ function Index() {
                           className="crate-btn-r absolute right-1.5 top-1.5 z-[3] hidden [@media(hover:hover)]:grid h-7 w-7 place-items-center rounded-full bg-destructive text-destructive-foreground shadow transition hover:bg-destructive/85 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100">
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
+                        {/* Faint play button: this album has a song and tapping it plays. */}
                         {c.track && !isPlaying && (
-                          <span className="crate-badge absolute bottom-1.5 left-1.5 rounded-full bg-primary p-1 text-primary-foreground group-hover:opacity-0"><Music2 className="h-2.5 w-2.5" /></span>
+                          <span aria-hidden className="crate-playhint pointer-events-none absolute left-1/2 top-1/2 z-[2] grid aspect-square w-[30%] min-w-7 max-w-14 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-black/25 text-white/90 ring-1 ring-white/35 backdrop-blur-[2px] transition-opacity [@media(hover:hover)]:group-hover:opacity-0"><Play className="ml-[8%] h-1/2 w-1/2 fill-current" /></span>
                         )}
                         {isPlaying && (
                           <span className="crate-badge absolute bottom-2 left-2 flex h-4 items-end gap-0.5">
