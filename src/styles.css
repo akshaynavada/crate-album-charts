@@ -240,5 +240,7 @@ body { font-family: var(--font-sans); background-image: var(--gradient-glow); ba
 }
 
 /* Touch reordering (editor): the album being held, and the spot it will swap with. */
-.crate-cell[data-dragging] { opacity: 0.55; scale: 0.92; z-index: 5; }
-.crate-cell[data-dragover] { outline: 3px solid var(--primary); outline-offset: 2px; scale: 1.04; }
+.crate-cell[data-dragging] { scale: 0.9; }
+.crate-cell[data-dragging] > * { opacity: 0.15; }
+.crate-cell[data-dragging]::after { content: ""; position: absolute; inset: 0; border: 2px dashed var(--muted-foreground); border-radius: inherit; }
+.crate-cell[data-dragover] { outline: 3px solid var(--primary); outline-offset: 3px; scale: 1.06; z-index: 4; box-shadow: 0 0 0 6px color-mix(in oklab, var(--primary) 25%, transparent); }

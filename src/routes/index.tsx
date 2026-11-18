@@ -205,12 +205,12 @@ function Index() {
   // Touch reordering: mobile browsers don't support HTML drag-and-drop, so hold an album for a moment,
   // slide it onto another spot and let go to swap them. A quick swipe still scrolls the page.
   const gridRef = useRef<HTMLDivElement>(null);
-  const [touchDrag, setTouchDrag] = useState<{ from: number; over: number | null } | null>(null);
+  const [touchDrag, setTouchDrag] = useState<{ from: number; over: number | null; x: number; y: number; size: number } | null>(null);
   useEffect(() => {
     const grid = gridRef.current;
     if (!grid) return;
     let timer: ReturnType<typeof setTimeout> | null = null;
-    let from: number | null = null, over: number | null = null, active = false, startX = 0, startY = 0;
+    let from: number | null = null, over: number | null = null, active = false, startX = 0, startY = 0, size = 0;
     const cellAt = (x: number, y: number) => {
       const el = document.elementFromPoint(x, y)?.closest<HTMLElement>(".crate-cell");
       return el && grid.contains(el) ? Number(el.dataset["index"]) : null;
@@ -220,16 +220,16 @@ function Index() {
       const t = e.touches[0];
       const el = (e.target as HTMLElement).closest<HTMLElement>(".crate-cell[data-filled]");
       if (!t || e.touches.length > 1 || !el || (e.target as HTMLElement).closest("button")) return;
-      from = Number(el.dataset["index"]); startX = t.clientX; startY = t.clientY;
-      timer = setTimeout(() => { active = true; over = from; setTouchDrag({ from: from!, over }); navigator.vibrate?.(15); }, 350);
+      from = Number(el.dataset["index"]); startX = t.clientX; startY = t.clientY; size = el.getBoundingClientRect().width;
+      timer = setTimeout(() => { active = true; over = from; setTouchDrag({ from: from!, over, x: startX, y: startY, size }); navigator.vibrate?.(15); }, 350);
     };
     const onMove = (e: TouchEvent) => {
       const t = e.touches[0];
       if (from === null || !t) return;
       if (!active) { if (Math.hypot(t.clientX - startX, t.clientY - startY) > 8) reset(); return; }
       e.preventDefault(); // stop the page scrolling while dragging
-      const i = cellAt(t.clientX, t.clientY);
-      if (i !== over) { over = i; setTouchDrag({ from, over }); }
+      over = cellAt(t.clientX, t.clientY);
+      setTouchDrag({ from, over, x: t.clientX, y: t.clientY, size });
     };
     const onEnd = (e: TouchEvent) => {
       if (active) {
@@ -380,6 +380,13 @@ function Index() {
         </ThemeScope>
       </main>
 
+      {/* While reordering by touch: a lifted copy of the album follows the finger (drawn above it so it stays visible). */}
+      {touchDrag && cells[touchDrag.from] && (
+        <div className="pointer-events-none fixed z-50" style={{ left: touchDrag.x, top: touchDrag.y, width: Math.max(72, touchDrag.size * 1.15), translate: "-50% -115%" }}>
+          <img src={cells[touchDrag.from]!.album.art} alt="" className={`aspect-square w-full rotate-[-4deg] object-cover shadow-2xl ring-2 ring-white/80 ${resolved.shape === "circle" ? "rounded-full" : "rounded-lg"}`} />
+          <p className="mt-1 truncate rounded bg-background/90 px-1.5 py-0.5 text-center text-[11px] font-medium shadow">#{touchDrag.from + 1} → {touchDrag.over !== null && touchDrag.over !== touchDrag.from ? `#${touchDrag.over + 1}` : "…"}</p>
+        </div>
+      )}
       <CustomizePanel open={customizing} onOpenChange={setCustomizing} theme={theme} setTheme={setTheme} resolved={resolved}
         covers={filled.map((x) => x.c!.album.art)} cols={cols} setCols={setCols} rows={rows} setRows={setRows}
         showNames={showNames} setShowNames={setShowNames} onClear={clearChart} title={title} setTitle={setTitle} />
