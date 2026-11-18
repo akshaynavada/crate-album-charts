@@ -117,7 +117,7 @@ function SharedChart() {
                   {c && (
                     <>
                       <img src={c.album.art} alt="" className={`crate-cover h-full w-full object-cover transition duration-300 ${isPlaying ? "scale-105" : ""}`} />
-                      <div className={`absolute inset-0 flex flex-col justify-end bg-gradient-to-t from-background/90 via-background/30 to-transparent p-2 transition ${isPlaying ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100"}`}>
+                      <div className={`crate-overlay absolute inset-0 flex flex-col justify-end bg-gradient-to-t from-background/90 via-background/30 to-transparent p-2 transition ${isPlaying ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100"}`}>
                         {c.track && (
                           <div className="flex items-end gap-2">
                             {isPlaying ? (

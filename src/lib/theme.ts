@@ -83,8 +83,10 @@ export type ListNum = "paren" | "dot" | "hash" | "pad" | "none";
 export type ListSize = "sm" | "md" | "lg";
 export type ListSettings = {
   pos: ListPos; num: ListNum; size: ListSize; song: boolean; note: boolean; genre: boolean; fff: boolean;
+  /** Only list the first N albums (0 = all). */
+  top: number;
 };
-export const DEFAULT_LIST: ListSettings = { pos: "below", num: "paren", size: "md", song: true, note: true, genre: false, fff: false };
+export const DEFAULT_LIST: ListSettings = { pos: "side", num: "paren", size: "md", song: true, note: true, genre: false, fff: false, top: 0 };
 export const formatRank = (n: number, style: ListNum) =>
   style === "paren" ? `${n})` : style === "dot" ? `${n}.` : style === "hash" ? `#${n}` : style === "pad" ? String(n).padStart(2, "0") : "";
 
@@ -111,7 +113,7 @@ export const themeSchema = z.object({
   grain: z.boolean().optional(),
   list: z.object({
     pos: z.enum(["below", "side"]), num: z.enum(["paren", "dot", "hash", "pad", "none"]), size: z.enum(["sm", "md", "lg"]),
-    song: z.boolean(), note: z.boolean(), genre: z.boolean(), fff: z.boolean(),
+    song: z.boolean(), note: z.boolean(), genre: z.boolean(), fff: z.boolean(), top: z.number().int().min(0).max(100),
   }).partial().optional(),
 });
 export type CrateTheme = z.infer<typeof themeSchema>;

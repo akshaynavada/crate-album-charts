@@ -208,6 +208,11 @@ body { font-family: var(--font-sans); background-image: var(--gradient-glow); ba
 }
 [data-shape="circle"] .crate-cell[data-filled] .crate-cover { mask: radial-gradient(circle, transparent 8.5%, #000 9%); }
 [data-shape="circle"] .crate-cell { box-shadow: 0 6px 18px -8px rgb(0 0 0 / 0.45); }
+/* Keep hover text, buttons and badges inside the circle (15% inset = the square that fits inside it). */
+[data-shape="circle"] .crate-overlay { z-index: 2; padding: 15%; text-align: center; }
+[data-shape="circle"] .crate-overlay > * { justify-content: center; }
+[data-shape="circle"] .crate-badge { inset: auto auto 15% 15%; }
+[data-shape="circle"] .crate-badge-top { inset: 15% auto auto 15%; }
 /* Riso: misregistered title */
 [data-preset="riso"] .crate-title { text-shadow: 3px 3px 0 color-mix(in oklab, var(--primary) 75%, transparent); }
 /* Outrun: neon title glow and a sunset horizon line */

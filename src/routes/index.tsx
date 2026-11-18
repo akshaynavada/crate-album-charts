@@ -94,12 +94,13 @@ function Index() {
     if (loaded) localStorage.setItem(STORE, JSON.stringify({ title, cols, rows, cells, showNames, theme }));
   }, [title, cols, rows, cells, showNames, theme, loaded]);
   useEffect(() => {
-    if (!loaded || !shareInfo) return;
+    // While the Customize pane is open, changes are a draft: the shared page updates once they're saved.
+    if (!loaded || !shareInfo || customizing) return;
     const t = setTimeout(() => {
       saveChart({ data: { ...shareInfo, data: { title, cols, rows, showNames, cells: cells.slice(0, cols * rows), theme } } }).catch(() => {});
     }, 800);
     return () => clearTimeout(t);
-  }, [title, cols, rows, cells, showNames, theme, loaded, shareInfo]);
+  }, [title, cols, rows, cells, showNames, theme, loaded, shareInfo, customizing]);
 
   useEffect(() => {
     if (!q.trim()) { setResults([]); setResultSrc("apple"); return; }
@@ -257,7 +258,7 @@ function Index() {
                     {c ? (
                       <>
                         <img src={c.album.art} alt={c.album.name} className={`crate-cover h-full w-full object-cover ${isPlaying ? "scale-105" : ""}`} />
-                        <div className={`absolute inset-0 flex flex-col justify-between bg-background/70 p-2 transition ${isPlaying ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}>
+                        <div className={`crate-overlay absolute inset-0 flex flex-col justify-between bg-background/70 p-2 transition ${isPlaying ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}>
                           <div className="flex justify-end gap-1">
                             <button onClick={(e) => { e.stopPropagation(); setPicker(i); }} className="rounded-full bg-card p-1.5 hover:text-primary" title="Song & description"><Music2 className="h-3.5 w-3.5" /></button>
                             <button onClick={(e) => { e.stopPropagation(); if (isPlaying) stop(); update(i, null); }} className="rounded-full bg-card p-1.5 hover:text-destructive" title="Remove"><X className="h-3.5 w-3.5" /></button>
@@ -268,10 +269,10 @@ function Index() {
                           </div>
                         </div>
                         {c.track && !isPlaying && (
-                          <span className="absolute bottom-1.5 left-1.5 rounded-full bg-primary p-1 text-primary-foreground group-hover:opacity-0"><Music2 className="h-2.5 w-2.5" /></span>
+                          <span className="crate-badge absolute bottom-1.5 left-1.5 rounded-full bg-primary p-1 text-primary-foreground group-hover:opacity-0"><Music2 className="h-2.5 w-2.5" /></span>
                         )}
                         {isPlaying && (
-                          <span className="absolute left-2 top-2 flex h-4 items-end gap-0.5">
+                          <span className="crate-badge-top absolute left-2 top-2 flex h-4 items-end gap-0.5">
                             {[0, 0.2, 0.4].map((d) => <span key={d} className="eq-bar w-1 h-full rounded bg-primary" style={{ animationDelay: `${d}s` }} />)}
                           </span>
                         )}

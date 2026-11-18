@@ -11,7 +11,7 @@ export function RankList({ cells, list, onOpen, onPlay, isPlaying }: {
   cells: Cell[]; list: ListSettings;
   onOpen?: (i: number) => void; onPlay?: (i: number) => void; isPlaying?: (i: number) => boolean;
 }) {
-  const filled = cells.map((c, i) => ({ c: c!, i })).filter((x) => x.c);
+  const filled = cells.map((c, i) => ({ c: c!, i })).filter((x) => x.c && (!list.top || x.i < list.top));
   if (!filled.length) return null;
   const side = list.pos === "side";
   return (

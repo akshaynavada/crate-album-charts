@@ -1,5 +1,7 @@
-import { useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import { useEffect, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import { Check, Loader2, RotateCcw, Wand2 } from "lucide-react";
+import { HexColorPicker } from "react-colorful";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useFontLink } from "@/components/ThemeScope";
 import {
@@ -20,6 +22,19 @@ export function CustomizePanel(p: Props) {
   useFontLink(p.open ? swatchFontsHref() : null);
   const [matching, setMatching] = useState(false);
   const [matchError, setMatchError] = useState<string | null>(null);
+
+  // Everything as it was when the pane opened, so Discard can put it back.
+  type Snap = { theme: CrateTheme; cols: number; rows: number; showNames: boolean };
+  const [snap, setSnap] = useState<Snap | null>(null);
+  useEffect(() => {
+    if (p.open) setSnap({ theme, cols: p.cols, rows: p.rows, showNames: p.showNames });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [p.open]);
+  const dirty = !!snap && JSON.stringify(snap) !== JSON.stringify({ theme, cols: p.cols, rows: p.rows, showNames: p.showNames });
+  const discard = () => {
+    if (snap) { setTheme(snap.theme); p.setCols(snap.cols); p.setRows(snap.rows); p.setShowNames(snap.showNames); }
+    p.onOpenChange(false);
+  };
 
   // Functional updates so quick successive clicks never overwrite each other.
   const set = (patch: Partial<CrateTheme>) => setTheme((prev) => {
@@ -59,7 +74,7 @@ export function CustomizePanel(p: Props) {
         onInteractOutside={(e) => e.preventDefault()}>
         <SheetHeader className="sticky top-0 z-10 border-b border-border bg-background/95 px-5 py-4 backdrop-blur">
           <SheetTitle className="font-display text-2xl font-normal">Customize</SheetTitle>
-          <SheetDescription className="text-xs">Changes show live and are saved with your crate.</SheetDescription>
+          <SheetDescription className="text-xs">Try things out. Save keeps them; Discard puts everything back.</SheetDescription>
         </SheetHeader>
 
         <div className="space-y-7 px-5 pb-10 pt-5 text-sm">
@@ -82,6 +97,9 @@ export function CustomizePanel(p: Props) {
                 </Row>
                 <Row label="Size">
                   <Chips value={list.size} options={[["sm", "S"], ["md", "M"], ["lg", "L"]]} onChange={(v) => setList({ size: v })} />
+                </Row>
+                <Row label="Show top">
+                  <TopN value={list.top} max={p.cols * p.rows} onChange={(n) => setList({ top: n })} />
                 </Row>
                 <Row label="Show">
                   <div className="flex flex-wrap gap-1">
@@ -108,12 +126,7 @@ export function CustomizePanel(p: Props) {
             {matchError && <p className="text-xs text-destructive">{matchError}</p>}
             <div className="grid grid-cols-5 gap-2">
               {([["bg", "Background"], ["surface", "Cards"], ["fg", "Text"], ["muted", "Muted"], ["accent", "Accent"]] as const).map(([k, label]) => (
-                <label key={k} className="flex cursor-pointer flex-col items-center gap-1 text-[11px] text-muted-foreground">
-                  <span className="relative h-9 w-full overflow-hidden rounded-md border border-border" style={{ background: resolved.basePalette[k] }}>
-                    <input type="color" value={resolved.basePalette[k]} onChange={(e) => setColour(k, e.target.value.toLowerCase())} className="absolute inset-0 cursor-pointer opacity-0" aria-label={`${label} colour`} />
-                  </span>
-                  {label}
-                </label>
+                <ColourSwatch key={k} label={label} value={resolved.basePalette[k]} onChange={(v) => setColour(k, v)} />
               ))}
             </div>
             <div className="flex flex-wrap items-center gap-1.5">
@@ -160,8 +173,56 @@ export function CustomizePanel(p: Props) {
               className="w-full rounded-lg border border-input bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring" />
           </Section>
         </div>
+        <div className="sticky bottom-0 z-10 flex items-center gap-2 border-t border-border bg-background/95 px-5 py-3 backdrop-blur">
+          <span className="mr-auto text-xs text-muted-foreground">{dirty ? "Unsaved changes" : "No changes yet"}</span>
+          <button onClick={discard} disabled={!dirty}
+            className="rounded-full border border-border px-4 py-1.5 text-sm hover:bg-muted disabled:opacity-40">Discard</button>
+          <button onClick={() => p.onOpenChange(false)}
+            className="rounded-full bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90">{dirty ? "Save" : "Done"}</button>
+        </div>
       </SheetContent>
     </Sheet>
+  );
+}
+
+/** Colour square that opens a picker popover; clicking anywhere else or pressing Esc closes it. */
+function ColourSwatch({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState(value);
+  useEffect(() => setText(value), [value]);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button className="flex flex-col items-center gap-1 text-[11px] text-muted-foreground" aria-label={`${label} colour`}>
+          <span className={`h-9 w-full rounded-md border ${open ? "border-foreground ring-2 ring-ring" : "border-border"}`} style={{ background: value }} />
+          {label}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent side="bottom" align="center" className="w-auto space-y-2 p-3">
+        <HexColorPicker color={value} onChange={(v) => onChange(v.toLowerCase())} />
+        <div className="flex items-center gap-2">
+          <input value={text} spellCheck={false} maxLength={7} aria-label={`${label} hex`}
+            onChange={(e) => { const v = e.target.value.trim(); setText(v); if (/^#[0-9a-fA-F]{6}$/.test(v)) onChange(v.toLowerCase()); }}
+            className="w-24 rounded-md border border-input bg-background px-2 py-1 font-mono text-xs uppercase outline-none focus:ring-2 focus:ring-ring" />
+          <button onClick={() => setOpen(false)} className="ml-auto rounded-full bg-primary px-3 py-1 text-xs font-medium text-primary-foreground">Done</button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/** "All" or a number of albums to list. */
+function TopN({ value, max, onChange }: { value: number; max: number; onChange: (n: number) => void }) {
+  return (
+    <div className="flex items-center gap-1">
+      {[0, 5, 10].filter((n) => n < max).map((n) => (
+        <button key={n} onClick={() => onChange(n)} aria-pressed={value === n}
+          className={`rounded-full border px-2.5 py-1 text-xs ${value === n ? "border-primary bg-primary text-primary-foreground" : "border-border hover:bg-muted"}`}>{n || "All"}</button>
+      ))}
+      <input type="number" min={1} max={max} value={value || ""} placeholder="#" aria-label="Number of albums to list"
+        onChange={(e) => { const n = Math.floor(+e.target.value); onChange(Number.isFinite(n) && n > 0 ? Math.min(n, 100) : 0); }}
+        className="w-14 rounded-full border border-input bg-background px-2 py-1 text-center text-xs outline-none focus:ring-2 focus:ring-ring" />
+    </div>
   );
 }
 
