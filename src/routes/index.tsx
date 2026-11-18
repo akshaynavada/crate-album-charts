@@ -246,10 +246,19 @@ function Index() {
     }).catch(() => ytTried.current.delete(key));
   }
   const update = (i: number, c: Cell) => setCells((p) => p.map((x, j) => (j === i ? c : x)));
-  const swap = (a: number, b: number) => setCells((p) => { const n = [...p]; const t = n[a] ?? null; n[a] = n[b] ?? null; n[b] = t; return n; });
+  /** Drag and drop: the album is inserted at the drop spot and the ones in between shift over.
+   *  Dropping on an empty spot just moves it there. */
+  const moveTo = (from: number, to: number) => setCells((p) => {
+    if (from === to) return p;
+    if (!p[to]) return p.map((x, j) => (j === to ? p[from] ?? null : j === from ? null : x));
+    const n = [...p];
+    const [item] = n.splice(from, 1);
+    n.splice(to, 0, item ?? null);
+    return n;
+  });
 
   // Touch reordering: mobile browsers don't support HTML drag-and-drop, so hold an album for a moment,
-  // slide it onto another spot and let go to swap them. A quick swipe still scrolls the page.
+  // slide it onto another spot and let go to move it there. A quick swipe still scrolls the page.
   const gridRef = useRef<HTMLDivElement>(null);
   const [touchDrag, setTouchDrag] = useState<{ from: number; over: number | null; x: number; y: number; size: number } | null>(null);
   useEffect(() => {
@@ -280,7 +289,7 @@ function Index() {
     const onEnd = (e: TouchEvent) => {
       if (active) {
         e.preventDefault(); // no tap/click after a drag
-        if (from !== null && over !== null && over !== from) swapRef.current(from, over);
+        if (from !== null && over !== null && over !== from) moveRef.current(from, over);
       }
       reset();
     };
@@ -294,8 +303,8 @@ function Index() {
       grid.removeEventListener("touchend", onEnd); grid.removeEventListener("touchcancel", reset);
     };
   }, [loaded]);
-  const swapRef = useRef(swap);
-  swapRef.current = swap;
+  const moveRef = useRef(moveTo);
+  moveRef.current = moveTo;
 
   const filled = cells.slice(0, total).map((c, i) => ({ c, i })).filter((x) => x.c);
 
@@ -388,7 +397,7 @@ function Index() {
                   <div key={i} draggable={!!c} data-index={i} data-filled={c ? "" : undefined} data-playing={isPlaying ? "" : undefined}
                     data-dragging={touchDrag?.from === i ? "" : undefined} data-dragover={touchDrag && touchDrag.over === i && touchDrag.from !== i ? "" : undefined}
                     onDragStart={() => (drag.current = i)} onDragOver={(e) => e.preventDefault()}
-                    onDrop={() => { if (drag.current !== null) swap(drag.current, i); drag.current = null; }}
+                    onDrop={() => { if (drag.current !== null) moveTo(drag.current, i); drag.current = null; }}
                     onClick={() => (c ? setPicker(i) : pickSpot(i))}
                     className={`crate-cell group relative aspect-square cursor-pointer overflow-hidden ${c ? "" : "border border-dashed"} ${selected === i && !c ? "border-primary bg-accent" : "border-border bg-muted/40 hover:bg-muted"}`}>
                     {c ? (
