@@ -86,7 +86,7 @@ export type ListSettings = {
   /** Only list the first N albums (0 = all). */
   top: number;
 };
-export const DEFAULT_LIST: ListSettings = { pos: "side", num: "paren", size: "md", song: true, note: true, genre: false, fff: false, top: 0 };
+export const DEFAULT_LIST: ListSettings = { pos: "side", num: "paren", size: "md", song: false, note: false, genre: false, fff: false, top: 0 };
 export const formatRank = (n: number, style: ListNum) =>
   style === "paren" ? `${n})` : style === "dot" ? `${n}.` : style === "hash" ? `#${n}` : style === "pad" ? String(n).padStart(2, "0") : "";
 

@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Search, Music2, Play, Pause, X, Disc3, Share2, Check, SlidersHorizontal } from "lucide-react";
+import { Search, Music2, Play, Pause, Disc3, Share2, Check, SlidersHorizontal, Pencil, Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { usePlayer } from "@/lib/use-player";
 import { fetchAlbum, splitFff, type AlbumTrack } from "@/lib/itunes";
@@ -147,15 +147,23 @@ function Index() {
   };
 
   const total = cols * rows;
+  // A search result only goes into the chart once Save is pressed in the song picker.
+  const [pending, setPending] = useState<{ idx: number; album: Album } | null>(null);
   const place = (album: Album) => {
-    const next = [...cells];
     let idx = selected < total ? selected : 0;
-    if (next[idx]) { const e = next.findIndex((c, i) => i < total && !c); if (e >= 0) idx = e; }
-    next[idx] = { album };
-    setCells(next);
-    const after = next.findIndex((c, i) => i < total && !c);
-    setSelected(after >= 0 ? after : idx);
+    if (cells[idx]) { const e = cells.findIndex((c, i) => i < total && !c); if (e >= 0) idx = e; }
+    setPending({ idx, album });
     setPicker(idx);
+  };
+  const pickerCell: Cell = picker === null ? null : pending && pending.idx === picker ? { album: pending.album } : (cells[picker] ?? null);
+  const closePicker = () => { stop(); setPicker(null); setPending(null); };
+  const savePick = (t: Track | undefined, extra: Required<PickDetails>) => {
+    if (picker !== null && pickerCell) {
+      const next = cells.map((x, j) => (j === picker ? { ...pickerCell, track: t ?? pickerCell.track, ...extra } : x));
+      setCells(next);
+      if (pending) { const after = next.findIndex((c, i) => i < total && !c); setSelected(after >= 0 ? after : picker); }
+    }
+    closePicker();
   };
   const update = (i: number, c: Cell) => setCells((p) => p.map((x, j) => (j === i ? c : x)));
   const swap = (a: number, b: number) => setCells((p) => { const n = [...p]; const t = n[a] ?? null; n[a] = n[b] ?? null; n[b] = t; return n; });
@@ -258,21 +266,26 @@ function Index() {
                     {c ? (
                       <>
                         <img src={c.album.art} alt={c.album.name} className={`crate-cover h-full w-full object-cover ${isPlaying ? "scale-105" : ""}`} />
-                        <div className={`crate-overlay absolute inset-0 flex flex-col justify-between bg-background/70 p-2 transition ${isPlaying ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}>
-                          <div className="flex justify-end gap-1">
-                            <button onClick={(e) => { e.stopPropagation(); setPicker(i); }} className="rounded-full bg-card p-1.5 hover:text-primary" title="Song & description"><Music2 className="h-3.5 w-3.5" /></button>
-                            <button onClick={(e) => { e.stopPropagation(); if (isPlaying) stop(); update(i, null); }} className="rounded-full bg-card p-1.5 hover:text-destructive" title="Remove"><X className="h-3.5 w-3.5" /></button>
-                          </div>
+                        <div className={`crate-overlay absolute inset-0 flex flex-col justify-end bg-background/70 p-2 transition ${isPlaying ? "opacity-100" : "opacity-0 [@media(hover:hover)]:group-hover:opacity-100"}`}>
                           <div className="flex items-end gap-2">
                             {c.track ? (isPlaying ? <Pause className="h-6 w-6 shrink-0 text-primary" /> : <Play className="h-6 w-6 shrink-0 text-primary" />) : null}
                             <p className="line-clamp-2 text-xs leading-tight">{c.track ? c.track.name : "Pick a song"}</p>
                           </div>
                         </div>
+                        {/* Mouse: edit and remove appear on hover. Touch: only edit is shown; remove lives in the edit window. */}
+                        <button onClick={(e) => { e.stopPropagation(); setPicker(i); }} aria-label={`Edit ${c.album.name}`} title="Edit song & details"
+                          className="crate-btn-l absolute left-1.5 top-1.5 z-[3] grid h-7 w-7 place-items-center rounded-full bg-card/95 text-foreground shadow transition hover:text-primary [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100">
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button onClick={(e) => { e.stopPropagation(); if (isPlaying) stop(); update(i, null); }} aria-label={`Remove ${c.album.name}`} title="Remove"
+                          className="crate-btn-r absolute right-1.5 top-1.5 z-[3] hidden [@media(hover:hover)]:grid h-7 w-7 place-items-center rounded-full bg-destructive text-destructive-foreground shadow transition hover:bg-destructive/85 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
                         {c.track && !isPlaying && (
                           <span className="crate-badge absolute bottom-1.5 left-1.5 rounded-full bg-primary p-1 text-primary-foreground group-hover:opacity-0"><Music2 className="h-2.5 w-2.5" /></span>
                         )}
                         {isPlaying && (
-                          <span className="crate-badge-top absolute left-2 top-2 flex h-4 items-end gap-0.5">
+                          <span className="crate-badge absolute bottom-2 left-2 flex h-4 items-end gap-0.5">
                             {[0, 0.2, 0.4].map((d) => <span key={d} className="eq-bar w-1 h-full rounded bg-primary" style={{ animationDelay: `${d}s` }} />)}
                           </span>
                         )}
@@ -295,15 +308,15 @@ function Index() {
       <CustomizePanel open={customizing} onOpenChange={setCustomizing} theme={theme} setTheme={setTheme} resolved={resolved}
         covers={filled.map((x) => x.c!.album.art)} cols={cols} setCols={setCols} rows={rows} setRows={setRows}
         showNames={showNames} setShowNames={setShowNames} />
-      <SongPicker idx={picker} cell={picker !== null ? (cells[picker] ?? null) : null} player={player}
-        onClose={() => { stop(); setPicker(null); }}
-        onPick={(t, extra) => { if (picker !== null && cells[picker]) update(picker, { ...cells[picker]!, track: t ?? cells[picker]!.track, ...extra }); stop(); setPicker(null); }} />
+      <SongPicker idx={picker} cell={pickerCell} player={player} isNew={!!pending} onClose={closePicker} onPick={savePick}
+        onRemove={() => { if (picker !== null) update(picker, null); closePicker(); }} />
     </div>
   );
 }
 
-function SongPicker({ idx, cell, onClose, onPick, player }: {
+function SongPicker({ idx, cell, onClose, onPick, onRemove, isNew, player }: {
   idx: number | null; cell: Cell; onClose: () => void; onPick: (t: Track | undefined, extra: Required<PickDetails>) => void;
+  onRemove: () => void; isNew: boolean;
   player: ReturnType<typeof usePlayer>;
 }) {
   const { playing, play } = player;
@@ -357,7 +370,7 @@ function SongPicker({ idx, cell, onClose, onPick, player }: {
             </ul>
             <div className="space-y-3 border-t border-border pt-4">
               <label className="block text-sm">
-                <span className="text-xs uppercase tracking-widest text-muted-foreground">Why this pick?</span>
+                <span className="text-xs uppercase tracking-widest text-muted-foreground">Description <span className="normal-case tracking-normal">(optional)</span></span>
                 <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={280} rows={2} placeholder="A few words about this album…"
                   className="mt-2 w-full resize-none rounded-lg border border-input bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring" />
               </label>
@@ -365,11 +378,8 @@ function SongPicker({ idx, cell, onClose, onPick, player }: {
                 <label className="block text-sm">
                   <span className="flex items-baseline justify-between text-xs uppercase tracking-widest text-muted-foreground">
                     <span>Genre <span className="normal-case tracking-normal">(optional)</span></span>
-                    {!genre && suggestedGenre && (
-                      <button type="button" onClick={() => setGenre(suggestedGenre)} className="normal-case tracking-normal text-foreground/70 underline-offset-2 hover:text-foreground hover:underline">Use “{suggestedGenre}”</button>
-                    )}
                   </span>
-                  <input value={genre} onChange={(e) => setGenre(e.target.value)} maxLength={60} placeholder="e.g. Dream pop"
+                  <input value={genre} onChange={(e) => setGenre(e.target.value)} maxLength={60} placeholder={suggestedGenre ?? "e.g. Dream pop"}
                     className="mt-2 w-full rounded-lg border border-input bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring" />
                 </label>
                 <label className="block text-sm">
@@ -379,7 +389,13 @@ function SongPicker({ idx, cell, onClose, onPick, player }: {
                 </label>
               </div>
               <button onClick={() => onPick(chosen ? { id: chosen.id, name: chosen.name, preview: chosen.preview, start: 0, ...(chosen.src ? { src: chosen.src } : {}) } : undefined, { note: note.trim(), genre: genre.trim(), fff: splitFff(fff).join(", ") })}
-                className="w-full rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">Save</button>
+                className="w-full rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">{isNew ? "Add to chart" : "Save"}</button>
+              {!isNew && (
+                <button onClick={onRemove}
+                  className="flex w-full items-center justify-center gap-2 rounded-lg border border-destructive/40 px-4 py-2 text-sm text-destructive hover:bg-destructive/10">
+                  <Trash2 className="h-4 w-4" />Remove from chart
+                </button>
+              )}
             </div>
           </>
         )}

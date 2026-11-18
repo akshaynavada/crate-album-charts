@@ -1,7 +1,10 @@
 import { useEffect, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
-import { Check, Loader2, RotateCcw, Wand2 } from "lucide-react";
+import { Check, Loader2, RotateCcw, Wand2, X } from "lucide-react";
 import { HexColorPicker } from "react-colorful";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useFontLink } from "@/components/ThemeScope";
 import {
@@ -33,8 +36,13 @@ export function CustomizePanel(p: Props) {
   const dirty = !!snap && JSON.stringify(snap) !== JSON.stringify({ theme, cols: p.cols, rows: p.rows, showNames: p.showNames });
   const discard = () => {
     if (snap) { setTheme(snap.theme); p.setCols(snap.cols); p.setRows(snap.rows); p.setShowNames(snap.showNames); }
+    setConfirming(false);
     p.onOpenChange(false);
   };
+  // Closing (X, Esc or Discard) throws changes away, so ask first when there are any.
+  const [confirming, setConfirming] = useState(false);
+  const requestClose = () => (dirty ? setConfirming(true) : p.onOpenChange(false));
+  const [tab, setTab] = useState<"layout" | "theme" | "style">("layout");
 
   // Functional updates so quick successive clicks never overwrite each other.
   const set = (patch: Partial<CrateTheme>) => setTheme((prev) => {
@@ -69,16 +77,28 @@ export function CustomizePanel(p: Props) {
   const listMode = !p.showNames ? "off" : list.pos;
 
   return (
-    <Sheet open={p.open} onOpenChange={p.onOpenChange} modal={false}>
-      <SheetContent side="right" className="w-full overflow-y-auto p-0 sm:max-w-sm [&>button:last-child]:z-20 [&>button:last-child]:rounded-full [&>button:last-child]:p-1"
+    <>
+    <Sheet open={p.open} onOpenChange={(o) => (o ? p.onOpenChange(true) : requestClose())} modal={false}>
+      <SheetContent side="right" className="w-full overflow-y-auto p-0 sm:max-w-sm [&>button:first-child]:hidden"
         onInteractOutside={(e) => e.preventDefault()}>
-        <SheetHeader className="sticky top-0 z-10 border-b border-border bg-background/95 px-5 py-4 backdrop-blur">
-          <SheetTitle className="font-display text-2xl font-normal">Customize</SheetTitle>
-          <SheetDescription className="text-xs">Try things out. Save keeps them; Discard puts everything back.</SheetDescription>
+        <SheetHeader className="sticky top-0 z-10 border-b border-border bg-background/95 px-5 py-4 text-left backdrop-blur">
+          <div className="flex items-center justify-between">
+            <SheetTitle className="font-display text-2xl font-normal">Customize</SheetTitle>
+            <button onClick={requestClose} aria-label="Close" title={dirty ? "Close and discard changes" : "Close"}
+              className="grid h-8 w-8 place-items-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"><X className="h-4 w-4" /></button>
+          </div>
+          <SheetDescription className="sr-only">Layout, album list, theme and style for your crate.</SheetDescription>
+          <div role="tablist" className="mt-2 grid grid-cols-3 rounded-full bg-muted p-1 text-sm">
+            {([["layout", "Layout"], ["theme", "Theme"], ["style", "Style"]] as const).map(([id, label]) => (
+              <button key={id} role="tab" aria-selected={tab === id} onClick={() => setTab(id)}
+                className={`rounded-full py-1.5 transition ${tab === id ? "bg-background font-medium text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>{label}</button>
+            ))}
+          </div>
         </SheetHeader>
 
         <div className="space-y-7 px-5 pb-10 pt-5 text-sm">
-          <Section title="Layout">
+          {tab === "layout" && <>
+          <Section title="Grid size">
             {([["Columns", p.cols, p.setCols], ["Rows", p.rows, p.setRows]] as const).map(([l, v, setV]) => (
               <label key={l} className="block">
                 <span className="flex justify-between text-xs text-muted-foreground"><span>{l}</span><span className="text-foreground">{v}</span></span>
@@ -112,7 +132,10 @@ export function CustomizePanel(p: Props) {
             )}
           </Section>
 
-          <Section title="Theme">
+          </>}
+
+          {tab === "theme" && <>
+          <Section title="Preset">
             <div className="grid grid-cols-2 gap-2">
               {PRESET_IDS.map((id) => <PresetSwatch key={id} id={id} active={theme.preset === id} covers={p.covers} onPick={() => pickPreset(id)} />)}
             </div>
@@ -141,6 +164,14 @@ export function CustomizePanel(p: Props) {
             {resolved.adjusted && <p className="text-xs text-muted-foreground">Some colours were nudged a little so text stays readable.</p>}
           </Section>
 
+          <Section title="Tagline">
+            <input value={theme.tagline ?? ""} onChange={(e) => set({ tagline: e.target.value || undefined })} maxLength={120}
+              placeholder="Songs for the drive home…"
+              className="w-full rounded-lg border border-input bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring" />
+          </Section>
+          </>}
+
+          {tab === "style" && (
           <Section title="Style" action={hasOverrides && <Reset label="Reset to theme" onClick={resetStyle} />}>
             <Row label="Title font">
               <FontSelect value={resolved.displayFont} onChange={(v) => set({ displayFont: v })} />
@@ -166,22 +197,30 @@ export function CustomizePanel(p: Props) {
               <Toggle on={resolved.grain} onClick={() => set({ grain: !resolved.grain })}>{resolved.grain ? "On" : "Off"}</Toggle>
             </Row>
           </Section>
-
-          <Section title="Tagline">
-            <input value={theme.tagline ?? ""} onChange={(e) => set({ tagline: e.target.value || undefined })} maxLength={120}
-              placeholder="Songs for the drive home…"
-              className="w-full rounded-lg border border-input bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-ring" />
-          </Section>
+          )}
         </div>
         <div className="sticky bottom-0 z-10 flex items-center gap-2 border-t border-border bg-background/95 px-5 py-3 backdrop-blur">
           <span className="mr-auto text-xs text-muted-foreground">{dirty ? "Unsaved changes" : "No changes yet"}</span>
-          <button onClick={discard} disabled={!dirty}
+          <button onClick={() => setConfirming(true)} disabled={!dirty}
             className="rounded-full border border-border px-4 py-1.5 text-sm hover:bg-muted disabled:opacity-40">Discard</button>
           <button onClick={() => p.onOpenChange(false)}
             className="rounded-full bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90">{dirty ? "Save" : "Done"}</button>
         </div>
       </SheetContent>
     </Sheet>
+    <AlertDialog open={confirming} onOpenChange={setConfirming}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Discard your changes?</AlertDialogTitle>
+          <AlertDialogDescription>Your crate goes back to how it looked when you opened Customize.</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Keep editing</AlertDialogCancel>
+          <AlertDialogAction onClick={discard} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Discard</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }
 

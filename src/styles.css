@@ -212,7 +212,8 @@ body { font-family: var(--font-sans); background-image: var(--gradient-glow); ba
 [data-shape="circle"] .crate-overlay { z-index: 2; padding: 15%; text-align: center; }
 [data-shape="circle"] .crate-overlay > * { justify-content: center; }
 [data-shape="circle"] .crate-badge { inset: auto auto 15% 15%; }
-[data-shape="circle"] .crate-badge-top { inset: 15% auto auto 15%; }
+[data-shape="circle"] .crate-btn-l { inset: 10% auto auto 10%; }
+[data-shape="circle"] .crate-btn-r { inset: 10% 10% auto auto; }
 /* Riso: misregistered title */
 [data-preset="riso"] .crate-title { text-shadow: 3px 3px 0 color-mix(in oklab, var(--primary) 75%, transparent); }
 /* Outrun: neon title glow and a sunset horizon line */
