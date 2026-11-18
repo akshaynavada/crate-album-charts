@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Search, Music2, Play, Pause, X, Disc3, Share2, Check } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { usePlayer } from "@/lib/use-player";
@@ -21,6 +21,9 @@ export const Route = createFileRoute("/")({
 
 import type { Album, Track, Cell, PickDetails } from "@/lib/chart-types";
 import { createChart, saveChart } from "@/lib/charts.functions";
+import { DEFAULT_THEME, parseTheme, resolveTheme, type CrateTheme } from "@/lib/theme";
+import { ThemeScope } from "@/components/ThemeScope";
+import { ThemePanel } from "@/components/ThemePanel";
 const SHARE = "crate-share-v1";
 const PUBLIC_ORIGIN = "https://crate-album-charts.lovable.app";
 /**
@@ -49,6 +52,8 @@ function Index() {
   const [results, setResults] = useState<Album[]>([]);
   const [searching, setSearching] = useState(false);
   const [picker, setPicker] = useState<number | null>(null);
+  const [theme, setTheme] = useState<CrateTheme>(DEFAULT_THEME);
+  const resolved = useMemo(() => resolveTheme(theme), [theme]);
   const player = usePlayer();
   const { playing, play, stop } = player;
   const drag = useRef<number | null>(null);
@@ -57,20 +62,20 @@ function Index() {
     try {
       const d = JSON.parse(localStorage.getItem(STORE) || "null");
       setShareInfo(JSON.parse(localStorage.getItem(SHARE) || "null"));
-      if (d) { setTitle(d.title); setCols(d.cols); setRows(d.rows); setCells([...d.cells, ...Array(100).fill(null)].slice(0, 100)); setShowNames(d.showNames ?? true); }
+      if (d) { setTitle(d.title); setCols(d.cols); setRows(d.rows); setCells([...d.cells, ...Array(100).fill(null)].slice(0, 100)); setShowNames(d.showNames ?? true); setTheme(parseTheme(d.theme)); }
     } catch {}
     setLoaded(true);
   }, []);
   useEffect(() => {
-    if (loaded) localStorage.setItem(STORE, JSON.stringify({ title, cols, rows, cells, showNames }));
-  }, [title, cols, rows, cells, showNames, loaded]);
+    if (loaded) localStorage.setItem(STORE, JSON.stringify({ title, cols, rows, cells, showNames, theme }));
+  }, [title, cols, rows, cells, showNames, theme, loaded]);
   useEffect(() => {
     if (!loaded || !shareInfo) return;
     const t = setTimeout(() => {
-      saveChart({ data: { ...shareInfo, data: { title, cols, rows, showNames, cells: cells.slice(0, cols * rows) } } }).catch(() => {});
+      saveChart({ data: { ...shareInfo, data: { title, cols, rows, showNames, cells: cells.slice(0, cols * rows), theme } } }).catch(() => {});
     }, 800);
     return () => clearTimeout(t);
-  }, [title, cols, rows, cells, showNames, loaded, shareInfo]);
+  }, [title, cols, rows, cells, showNames, theme, loaded, shareInfo]);
 
   useEffect(() => {
     if (!q.trim()) { setResults([]); return; }
@@ -88,7 +93,7 @@ function Index() {
 
   const [copied, setCopied] = useState(false);
   const share = async () => {
-    const data = { title, cols, rows, showNames, cells: cells.slice(0, total) };
+    const data = { title, cols, rows, showNames, cells: cells.slice(0, total), theme };
     let info = shareInfo;
     if (!info) {
       info = await createChart({ data: { data } });
@@ -165,29 +170,34 @@ function Index() {
             <button onClick={() => { if (confirm("Clear the whole chart?")) { setCells(Array(100).fill(null)); stop(); } }}
               className="text-xs text-muted-foreground underline-offset-4 hover:text-destructive hover:underline">Clear chart</button>
           </div>
+
+          <ThemePanel theme={theme} setTheme={setTheme} resolved={resolved} covers={filled.map((x) => x.c!.album.art)} />
         </aside>
 
-        <section className="rounded-3xl border border-border bg-card/60 p-4 shadow-record md:p-6">
+        <ThemeScope as="section" theme={resolved} className="overflow-hidden rounded-3xl border border-border p-4 shadow-record md:p-6">
           <div className="mb-6 flex items-start justify-between gap-4">
-            <h1 className="font-display text-5xl leading-none md:text-6xl">{title}</h1>
+            <div className="min-w-0">
+              <h1 className="crate-title font-display text-5xl leading-none md:text-6xl">{title}</h1>
+              {resolved.tagline && <p className="mt-3 text-sm text-muted-foreground">{resolved.tagline}</p>}
+            </div>
             <button onClick={share} className="flex shrink-0 items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
               {copied ? <Check className="h-4 w-4" /> : <Share2 className="h-4 w-4" />}{copied ? "Link copied" : "Share"}
             </button>
           </div>
           <div className="flex flex-col gap-8">
-            <div className="grid flex-1 gap-2" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0,1fr))` }}>
+            <div className="crate-grid grid flex-1" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0,1fr))` }}>
               {cells.slice(0, total).map((c, i) => {
                 const key = `cell-${i}`;
                 const isPlaying = playing === key;
                 return (
-                  <div key={i} draggable={!!c}
+                  <div key={i} draggable={!!c} data-index={i} data-filled={c ? "" : undefined} data-playing={isPlaying ? "" : undefined}
                     onDragStart={() => (drag.current = i)} onDragOver={(e) => e.preventDefault()}
                     onDrop={() => { if (drag.current !== null) swap(drag.current, i); drag.current = null; }}
                     onClick={() => (c ? (c.track ? play(key, c.track) : setPicker(i)) : setSelected(i))}
-                    className={`group relative aspect-square cursor-pointer overflow-hidden rounded-md transition ${c ? "" : "border border-dashed"} ${selected === i && !c ? "border-primary bg-accent" : "border-border bg-muted/40 hover:bg-muted"}`}>
+                    className={`crate-cell group relative aspect-square cursor-pointer overflow-hidden ${c ? "" : "border border-dashed"} ${selected === i && !c ? "border-primary bg-accent" : "border-border bg-muted/40 hover:bg-muted"}`}>
                     {c ? (
                       <>
-                        <img src={c.album.art} alt={c.album.name} className={`h-full w-full object-cover transition ${isPlaying ? "scale-105" : ""}`} />
+                        <img src={c.album.art} alt={c.album.name} className={`crate-cover h-full w-full object-cover ${isPlaying ? "scale-105" : ""}`} />
                         <div className={`absolute inset-0 flex flex-col justify-between bg-background/70 p-2 transition ${isPlaying ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}>
                           <div className="flex justify-end gap-1">
                             <button onClick={(e) => { e.stopPropagation(); setPicker(i); }} className="rounded-full bg-card p-1.5 hover:text-primary" title="Song & description"><Music2 className="h-3.5 w-3.5" /></button>
@@ -229,7 +239,7 @@ function Index() {
               </ol>
             )}
           </div>
-        </section>
+        </ThemeScope>
       </main>
 
       <SongPicker idx={picker} cell={picker !== null ? (cells[picker] ?? null) : null} player={player}

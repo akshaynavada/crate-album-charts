@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { themeSchema } from "@/lib/theme";
 
 const dataSchema = z.object({
   title: z.string().max(200),
@@ -7,6 +8,8 @@ const dataSchema = z.object({
   rows: z.number().int().min(1).max(10),
   showNames: z.boolean(),
   cells: z.array(z.any()).max(100),
+  // Invalid or tampered theme data falls back to the default instead of rejecting the save.
+  theme: themeSchema.optional().catch(undefined),
 });
 
 export const createChart = createServerFn({ method: "POST" })

@@ -4,11 +4,13 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import type { Cell } from "@/lib/chart-types";
 import { albumLinks, fetchAlbum, splitFff, type AlbumDetails } from "@/lib/itunes";
 import type { usePlayer } from "@/lib/use-player";
+import { useCrateTheme } from "@/components/ThemeScope";
 
 /** Shared-view album detail: the creator's note, every track's preview, and links out to streaming stores. */
 export function AlbumModal({ cell, index, onClose, player }: {
   cell: Cell; index: number | null; onClose: () => void; player: ReturnType<typeof usePlayer>;
 }) {
+  const theme = useCrateTheme();
   const [details, setDetails] = useState<AlbumDetails | null>(null);
   const [failed, setFailed] = useState(false);
   const open = index !== null && !!cell;
@@ -29,8 +31,9 @@ export function AlbumModal({ cell, index, onClose, player }: {
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       {/* Desktop: square art on the left sized to the dialog height, details scroll on the right. */}
-      <DialogContent style={{ ["--h" as string]: "min(86vh, 600px, 52vw)" }}
-        className="max-h-[92vh] max-w-[calc(var(--h)+400px)] gap-0 overflow-y-auto p-0 md:overflow-hidden [&>button:last-child]:rounded-full [&>button:last-child]:bg-background/70 [&>button:last-child]:p-1.5">
+      {/* Dialogs portal out of the themed wrapper, so re-apply the crate theme here. */}
+      <DialogContent {...theme.attrs} style={{ ...theme.style, ["--h" as string]: "min(86vh, 600px, 52vw)" }}
+        className="font-sans text-foreground max-h-[92vh] max-w-[calc(var(--h)+400px)] gap-0 overflow-y-auto p-0 md:overflow-hidden [&>button:last-child]:rounded-full [&>button:last-child]:bg-background/70 [&>button:last-child]:p-1.5">
         <div className="grid md:h-[var(--h)] md:grid-cols-[var(--h)_minmax(0,1fr)]">
           <img src={cell.album.art} alt={`${cell.album.name} by ${cell.album.artist}`} className="aspect-square w-full object-cover sm:rounded-t-lg md:h-full md:rounded-l-lg md:rounded-tr-none" />
           <div className="flex min-w-0 flex-col gap-5 p-5 md:overflow-y-auto md:p-6">
