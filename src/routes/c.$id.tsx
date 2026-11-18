@@ -135,7 +135,7 @@ function SharedChart() {
                   {c && (
                     <>
                       <img src={c.album.art} alt="" className={`crate-cover h-full w-full object-cover transition duration-300 ${isPlaying ? "scale-105" : ""}`} />
-                      {c.track && !isPlaying && <span aria-hidden className="crate-playhint pointer-events-none absolute left-1/2 top-1/2 z-[2] grid aspect-square w-[30%] min-w-7 max-w-14 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-black/25 text-white/90 ring-1 ring-white/35 backdrop-blur-[2px] transition-opacity [@media(hover:hover)]:group-hover:opacity-0"><Play className="ml-[8%] h-1/2 w-1/2 fill-current" /></span>}
+                      {c.track && !isPlaying && <span aria-hidden className="crate-playhint pointer-events-none absolute left-1/2 top-1/2 z-[2] grid aspect-square w-[17%] min-w-6 max-w-9 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-black/20 text-white/80 ring-1 ring-white/20 backdrop-blur-[1px] transition-opacity [@media(hover:hover)]:group-hover:opacity-0"><Play className="ml-[8%] h-[45%] w-[45%] fill-current" /></span>}
                       <div className={`crate-overlay absolute inset-0 flex flex-col justify-end bg-gradient-to-t from-background/90 via-background/30 to-transparent p-2 transition ${isPlaying ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100"}`}>
                         <div className="flex items-end gap-2">
                           {c.track && (isPlaying ? (
