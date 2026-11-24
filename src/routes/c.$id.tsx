@@ -176,7 +176,7 @@ function SharedChart() {
             <RankList cells={cells} list={theme.list} onOpen={(i) => openAlbum(i)} onPlay={toggle} isPlaying={(i) => player.playing === cellKey(i)} />
           )}
         </div>
-        <ListenBar cells={cells} title={data.title} />
+        <ListenBar cells={cells} title={data.title} showList={data.showNames} link={`/c/${id}`} />
       </main>
       <AlbumModal index={open} cell={open !== null ? (cells[open] ?? null) : null} player={player}
         onClose={() => { player.stop(); setOpen(null); }}

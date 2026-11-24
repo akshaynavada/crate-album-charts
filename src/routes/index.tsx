@@ -473,7 +473,7 @@ function Index() {
                 onPlay={(i) => { const t = cells[i]?.track; if (t) play(`cell-${i}`, t); }} isPlaying={(i) => playing === `cell-${i}`} />
             )}
           </div>
-          <ListenBar cells={cells.slice(0, total)} title={title} />
+          <ListenBar cells={cells.slice(0, total)} title={title} showList={showNames} link={shareInfo ? `/c/${shareInfo.id}` : undefined} />
         </ThemeScope>
       </main>
 
