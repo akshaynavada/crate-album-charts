@@ -481,7 +481,7 @@ function Index() {
                 onPlay={(i) => { const t = cells[i]?.track; if (t) play(`cell-${i}`, t); }} isPlaying={(i) => playing === `cell-${i}`} />
             )}
           </div>
-          <ListenBar cells={cells.slice(0, total)} title={title} imageButton={false} />
+          <ListenBar cells={cells.slice(0, total)} title={title} />
           <ChartImageDialog open={imageOpen} onOpenChange={setImageOpen} cells={cells.slice(0, total)} title={title.trim()} theme={resolved}
             showList={showNames} link={shareInfo ? `/c/${shareInfo.id}` : undefined} />
         </ThemeScope>
