@@ -182,7 +182,7 @@ export function AlbumModal({ cell, index, onClose, player, position, onPrev, onN
                 <h3 className="mb-2 flex items-baseline justify-between gap-2 text-xs uppercase tracking-widest text-muted-foreground">
                   The pick<span className="truncate normal-case tracking-normal text-foreground">{hooked.name}</span>
                 </h3>
-                <FullSongPlayer track={hooked} colors={{ bg: theme.palette.surface, link: theme.palette.accent }} autoplay />
+                <FullSongPlayer track={hooked} autoplay />
               </div>
             )}
 
@@ -191,7 +191,7 @@ export function AlbumModal({ cell, index, onClose, player, position, onPrev, onN
                 className="flex items-center gap-3 rounded-lg bg-accent px-3 py-2.5 text-left text-sm hover:bg-accent/80">
                 {player.playing === keyFor(hooked.id) ? <Pause className="h-5 w-5 shrink-0" /> : <Play className="h-5 w-5 shrink-0" />}
                 <span className="min-w-0 flex-1">
-                  <span className="block text-[11px] uppercase tracking-widest text-muted-foreground">The pick</span>
+                  <span className="block text-[11px] uppercase tracking-widest text-muted-foreground">The pick{hooked.player === "bandcamp" && hooked.bc?.track ? " · whole song from Bandcamp" : ""}</span>
                   <span className="block truncate">{hooked.name}</span>
                 </span>
               </button>

@@ -7,6 +7,7 @@ import { getChart } from "@/lib/charts.functions";
 import { chartCount, type ChartData } from "@/lib/chart-types";
 import { canPlay, usePlayer } from "@/lib/use-player";
 import { refreshPreviews } from "@/lib/deezer-previews";
+import { refreshStreams } from "@/lib/bandcamp-streams";
 import { parseTheme, resolveTheme } from "@/lib/theme";
 import { ThemeScope } from "@/components/ThemeScope";
 import { RankList } from "@/components/RankList";
@@ -65,6 +66,7 @@ function SharedChart() {
   useEffect(() => {
     const ids = (data?.cells ?? []).flatMap((c) => (c?.track?.src === "deezer" && typeof c.track.id === "number" ? [c.track.id] : []));
     if (ids.length) refreshPreviews(ids).catch(() => {});
+    refreshStreams((data?.cells ?? []).map((c) => (c?.track?.player === "bandcamp" ? c.track.bc : undefined))).catch(() => {});
   }, [data]);
 
   // Browsers block sound until the visitor clicks or taps the page once; hide the hint after that.
@@ -87,7 +89,7 @@ function SharedChart() {
     if (hoverTimer.current) clearTimeout(hoverTimer.current);
     // Short delay so sweeping the mouse across the grid doesn't fire a burst of clips.
     hoverTimer.current = setTimeout(async () => {
-      const ok = await player.play(cellKey(i), t, { toggle: false });
+      const ok = await player.play(cellKey(i), t, { toggle: false, peek: true });
       if (!ok) setSoundBlocked(true);
     }, 180);
   };

@@ -9,6 +9,7 @@ import { refreshPreviews } from "@/lib/deezer-previews";
 import { findYouTubeVideo } from "@/lib/youtube.functions";
 import { findBandcampAlbum, getBandcampRelease, type BandcampRelease } from "@/lib/bandcamp.functions";
 import { FullSongPlayer, youTubeId } from "@/components/FullSongPlayer";
+import { refreshStreams, rememberStreams } from "@/lib/bandcamp-streams";
 import { ListenBar } from "@/components/ListenBar";
 import { ChartImageDialog } from "@/components/ChartImageDialog";
 import { useBackToClose } from "@/lib/use-back-to-close";
@@ -114,6 +115,7 @@ function Index() {
     if (!loaded) return;
     const ids = cells.flatMap((c) => (c?.track?.src === "deezer" && typeof c.track.id === "number" ? [c.track.id] : []));
     if (ids.length) refreshPreviews(ids).catch(() => {});
+    refreshStreams(cells.map((c) => (c?.track?.player === "bandcamp" ? c.track.bc : undefined))).catch(() => {});
     // Songs picked before YouTube matching existed (or while it was unavailable) get looked up now.
     for (const c of cells) if (c) ensureYouTube(c);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -511,10 +513,8 @@ const AUDIO_SOURCES: { id: AudioSrc; label: "Apple Music" | "Deezer" | "YouTube"
   { id: "apple", label: "Apple Music", hint: "30-second preview" },
   { id: "deezer", label: "Deezer", hint: "30-second preview" },
   { id: "youtube", label: "YouTube", hint: "Whole song in a YouTube player" },
-  { id: "bandcamp", label: "Bandcamp", hint: "Whole song in Bandcamp's player" },
+  { id: "bandcamp", label: "Bandcamp", hint: "Whole song from Bandcamp" },
 ];
-/** Bandcamp's embed picks its text colour from these; the picker uses the site's default dark theme. */
-const PICKER_COLORS = { bg: "#121316", link: "#e8e9eb" };
 
 function SongPicker({ idx, cell, onClose, onPick, onRemove, isNew, player }: {
   idx: number | null; cell: Cell; onClose: () => void; onPick: (t: Track | undefined, extra: Required<PickDetails>) => void;
@@ -603,7 +603,7 @@ function SongPicker({ idx, cell, onClose, onPick, onRemove, isNew, player }: {
     setBc({ status: "loading" });
     const saved = cell.track?.bc?.url;
     (saved ? getBandcampRelease({ data: { url: saved } }) : findBandcampAlbum({ data: { artist: cell.album.artist, album: cell.album.name } }))
-      .then((r) => { if (!cancelled) setBc(r ? { status: "found", release: r } : { status: "none" }); })
+      .then((r) => { if (r) rememberStreams(r.tracks); if (!cancelled) setBc(r ? { status: "found", release: r } : { status: "none" }); })
       .catch(() => { if (!cancelled) setBc({ status: "none" }); });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -612,6 +612,7 @@ function SongPicker({ idx, cell, onClose, onPick, onRemove, isNew, player }: {
     if (!bcPaste.trim()) return;
     setBc({ status: "loading" });
     const r = await getBandcampRelease({ data: { url: bcPaste.trim() } }).catch(() => null);
+    if (r) rememberStreams(r.tracks);
     setBc(r ? { status: "found", release: r } : { status: "none" });
   };
   const release = bc.release;
@@ -639,10 +640,11 @@ function SongPicker({ idx, cell, onClose, onPick, onRemove, isNew, player }: {
                 <img src={cell.album.art} alt="" className="h-16 w-16 rounded-md" />
                 <div>
                   <DialogTitle className="font-display text-2xl font-normal">{cell.album.name}</DialogTitle>
-                  <p className="text-sm text-muted-foreground">{cell.album.artist} · hook a song to this album</p>
+                  <p className="text-sm text-muted-foreground">{cell.album.artist}</p>
                 </div>
               </div>
             </DialogHeader>
+            <h3 className="-mb-1 text-xs uppercase tracking-widest text-muted-foreground">Hook a song <span className="normal-case tracking-normal">(optional)</span></h3>
             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
               <span>Audio from</span>
               <div role="radiogroup" aria-label="Audio source" className="flex flex-wrap gap-1">
@@ -678,7 +680,7 @@ function SongPicker({ idx, cell, onClose, onPick, onRemove, isNew, player }: {
             {audioSrc === "youtube" && (
               <div className="space-y-2 rounded-lg border border-border p-3 text-sm">
                 {!chosen ? <p className="text-muted-foreground">Pick a song above to find it on YouTube.</p>
-                  : ytId ? <FullSongPlayer track={{ id: chosen.id, name: chosen.name, start: 0, player: "youtube", yt: ytId }} colors={PICKER_COLORS} />
+                  : ytId ? <FullSongPlayer track={{ id: chosen.id, name: chosen.name, start: 0, player: "youtube", yt: ytId }} />
                   : <p className="text-muted-foreground">{yt.status === "loading" ? "Finding it on YouTube…" : yt.status === "none" ? "Couldn't find this song on YouTube." : yt.status === "unavailable" ? "YouTube search is busy right now. Paste a link instead." : ""}</p>}
                 <input value={ytPaste} onChange={(e) => setYtPaste(e.target.value)} placeholder={ytId && !pastedYt ? "Wrong video? Paste a YouTube link" : "Paste a YouTube link"}
                   className={`w-full rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring ${ytPaste && !pastedYt ? "border-destructive" : "border-input"}`} />
@@ -692,9 +694,21 @@ function SongPicker({ idx, cell, onClose, onPick, onRemove, isNew, player }: {
                   <>
                     <p className="text-xs text-muted-foreground">
                       <a href={release.url} target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-foreground">{release.artist} — {release.title}</a>
-                      {chosen && !bcTrack && " · couldn't match the song, so it plays the release from the start"}
+                      {chosen && !bcTrack && " · couldn't find this song on it, so the pick keeps its 30-second preview"}
                     </p>
-                    <FullSongPlayer track={{ id: chosen?.id ?? 0, name: chosen?.name ?? release.title, start: 0, player: "bandcamp", bc: bcRef }} colors={PICKER_COLORS} />
+                    {bcTrack && chosen && (() => {
+                      const t: Track = { id: chosen.id, name: chosen.name, start: 0, player: "bandcamp", bc: bcRef };
+                      const k = `bc-${bcTrack}`;
+                      return (
+                        <button onClick={() => play(k, t)} className="flex w-full items-center gap-3 rounded-lg bg-accent px-3 py-2.5 text-left hover:bg-accent/80">
+                          {playing === k ? <Pause className="h-5 w-5 shrink-0" /> : <Play className="h-5 w-5 shrink-0" />}
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-[11px] uppercase tracking-widest text-muted-foreground">Whole song from Bandcamp</span>
+                            <span className="block truncate">{chosen.name}</span>
+                          </span>
+                        </button>
+                      );
+                    })()}
                   </>
                 )}
                 {bc.status === "none" && bcPaste.trim() && <p className="text-destructive">Couldn't read that link. Paste a bandcamp.com album or track page.</p>}

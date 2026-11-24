@@ -2,8 +2,10 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 /*
- * Bandcamp as a full-song source: the chart stores a release's ids and plays it through Bandcamp's own
- * embedded player. Bandcamp has no public API, so this reads the same data its web pages use:
+ * Bandcamp as a full-song source: the chart stores a release's link and ids, and Crate's own player streams
+ * the song (the same 128 kbps stream Bandcamp's player uses; links are signed and last about a day, so they
+ * are fetched fresh when a chart loads). Bandcamp has no public API, so this reads the same data its web
+ * pages use:
  *  - the site search's autocomplete endpoint, to find an album by artist and title;
  *  - the release page's `data-tralbum` JSON, for the album id and its tracks.
  * Either can change without notice; when they do, lookups return null and the picker asks for a link.
@@ -16,11 +18,18 @@ export type BandcampRelease = {
   album?: number | undefined;
   /** Set when the link was a single track page. */
   track?: number | undefined;
-  tracks: { id: number; title: string }[];
+  tracks: { id: number; title: string; stream?: string | undefined }[];
 };
 
 const UA = { "user-agent": "Mozilla/5.0 (compatible; CrateAlbumCharts/1.0)" };
-const cache = new Map<string, BandcampRelease | null>();
+const cache = new Map<string, { at: number; value: BandcampRelease | null }>();
+const TTL = 60 * 60 * 1000; // stream links last ~24h; re-read pages hourly
+const cached = (k: string) => { const c = cache.get(k); return c && Date.now() - c.at < TTL ? c : undefined; };
+const remember = (k: string, value: BandcampRelease | null) => {
+  if (cache.size > 2000) cache.delete(cache.keys().next().value!);
+  cache.set(k, { at: Date.now(), value });
+  return value;
+};
 
 const decode = (s: string) =>
   s.replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
@@ -32,7 +41,8 @@ async function readRelease(raw: string): Promise<BandcampRelease | null> {
   try { u = new URL(raw); } catch { return null; }
   if (!isBandcamp(u) || !/^\/(album|track)\//.test(u.pathname)) return null;
   const url = `${u.origin}${u.pathname}`;
-  if (cache.has(url)) return cache.get(url)!;
+  const hit = cached(url);
+  if (hit) return hit.value;
   const r = await fetch(url, { headers: UA, redirect: "follow" }).catch(() => null);
   if (!r || !r.ok) return null;
   const html = await r.text();
@@ -48,10 +58,11 @@ async function readRelease(raw: string): Promise<BandcampRelease | null> {
     album: isTrack ? (typeof t.current?.album_id === "number" ? t.current.album_id : undefined) : t.id,
     track: isTrack ? t.id : undefined,
     tracks: (t.trackinfo ?? []).flatMap((x: any) =>
-      typeof x.track_id === "number" && x.track_id > 0 ? [{ id: x.track_id, title: String(x.title ?? "") }] : []),
+      typeof x.track_id === "number" && x.track_id > 0
+        ? [{ id: x.track_id, title: String(x.title ?? ""), stream: typeof x.file?.["mp3-128"] === "string" ? x.file["mp3-128"] : undefined }]
+        : []),
   };
-  cache.set(url, release);
-  return release;
+  return remember(url, release);
 }
 
 const norm = (s: string) =>
@@ -67,7 +78,8 @@ export const findBandcampAlbum = createServerFn({ method: "GET" })
   .inputValidator((d: unknown) => z.object({ artist: z.string().trim().min(1).max(200), album: z.string().trim().min(1).max(300) }).parse(d))
   .handler(async ({ data }) => {
     const key = `find:${data.artist}|${data.album}`.toLowerCase();
-    if (cache.has(key)) return cache.get(key)!;
+    const hit = cached(key);
+    if (hit) return hit.value;
     const r = await fetch("https://bandcamp.com/api/bcsearch_public_api/1/autocomplete_elastic", {
       method: "POST",
       headers: { ...UA, "content-type": "application/json" },
@@ -76,20 +88,25 @@ export const findBandcampAlbum = createServerFn({ method: "GET" })
     if (!r || !r.ok) return null;
     const j: any = await r.json().catch(() => null);
     const artist = norm(data.artist), album = norm(data.album);
-    const hit = (j?.auto?.results ?? []).find((x: any) => {
+    const match = (j?.auto?.results ?? []).find((x: any) => {
       if (x.type !== "a") return false;
       const a = norm(String(x.band_name ?? "")), n = norm(String(x.name ?? ""));
       return (a === artist || a.includes(artist) || artist.includes(a)) && (n === album || n.startsWith(album) || album.startsWith(n));
     });
-    const found = hit?.item_url_path ? await readRelease(String(hit.item_url_path)) : null;
-    cache.set(key, found);
-    return found;
+    const found = match?.item_url_path ? await readRelease(String(match.item_url_path)) : null;
+    return remember(key, found);
   });
 
-/** The URL for Bandcamp's embedded player (a slim bar with play controls). */
-export function bandcampEmbedUrl(bc: { album?: number | undefined; track?: number | undefined }, colors: { bg: string; link: string }) {
-  const parts = [bc.album ? `album=${bc.album}` : `track=${bc.track}`, "size=large",
-    `bgcol=${colors.bg.replace("#", "")}`, `linkcol=${colors.link.replace("#", "")}`, "tracklist=false", "artwork=none", "transparent=true"];
-  if (bc.album && bc.track) parts.push(`track=${bc.track}`);
-  return `https://bandcamp.com/EmbeddedPlayer/${parts.join("/")}/`;
-}
+/** Fresh stream links for saved Bandcamp picks, keyed by track id. */
+export const getBandcampStreams = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) => z.object({ refs: z.array(z.object({ url: z.string().url().max(500), track: z.number().int().positive() })).max(100) }).parse(d))
+  .handler(async ({ data }) => {
+    const out: Record<string, string> = {};
+    const byUrl = new Map<string, number[]>();
+    for (const r of data.refs) byUrl.set(r.url, [...(byUrl.get(r.url) ?? []), r.track]);
+    await Promise.all([...byUrl].map(async ([url, ids]) => {
+      const rel = await readRelease(url).catch(() => null);
+      for (const t of rel?.tracks ?? []) if (ids.includes(t.id) && t.stream) out[t.id] = t.stream;
+    }));
+    return out;
+  });
