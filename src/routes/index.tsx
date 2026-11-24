@@ -7,6 +7,8 @@ import { fetchAlbum, findAlbumOn, normTitle, splitFff, type AlbumTrack } from "@
 import { getRelatedArtists, searchDeezerAlbums } from "@/lib/deezer.functions";
 import { refreshPreviews } from "@/lib/deezer-previews";
 import { findYouTubeVideo } from "@/lib/youtube.functions";
+import { findBandcampAlbum, getBandcampRelease, type BandcampRelease } from "@/lib/bandcamp.functions";
+import { FullSongPlayer, youTubeId } from "@/components/FullSongPlayer";
 import { ListenBar } from "@/components/ListenBar";
 import { ChartImageDialog } from "@/components/ChartImageDialog";
 import { useBackToClose } from "@/lib/use-back-to-close";
@@ -504,6 +506,16 @@ function Index() {
   );
 }
 
+type AudioSrc = "apple" | "deezer" | "youtube" | "bandcamp";
+const AUDIO_SOURCES: { id: AudioSrc; label: "Apple Music" | "Deezer" | "YouTube" | "Bandcamp"; hint: string }[] = [
+  { id: "apple", label: "Apple Music", hint: "30-second preview" },
+  { id: "deezer", label: "Deezer", hint: "30-second preview" },
+  { id: "youtube", label: "YouTube", hint: "Whole song in a YouTube player" },
+  { id: "bandcamp", label: "Bandcamp", hint: "Whole song in Bandcamp's player" },
+];
+/** Bandcamp's embed picks its text colour from these; the picker uses the site's default dark theme. */
+const PICKER_COLORS = { bg: "#121316", link: "#e8e9eb" };
+
 function SongPicker({ idx, cell, onClose, onPick, onRemove, isNew, player }: {
   idx: number | null; cell: Cell; onClose: () => void; onPick: (t: Track | undefined, extra: Required<PickDetails>) => void;
   onRemove: () => void; isNew: boolean;
@@ -517,15 +529,23 @@ function SongPicker({ idx, cell, onClose, onPick, onRemove, isNew, player }: {
   const [fff, setFff] = useState("");
   const [suggestedGenre, setSuggestedGenre] = useState<string | undefined>();
   const [suggestedFff, setSuggestedFff] = useState<string | undefined>();
-  // Where the previews come from. Starts as the saved pick's source (or the album's catalog); the creator can
-  // switch to the other catalog when a preview is missing or sounds wrong.
+  // Audio source. Apple Music / Deezer: 30-second previews. YouTube / Bandcamp: the whole song, played in the
+  // album window through that service's own player; hover and quick play still use a preview clip.
+  // `clipSrc` is the catalog the tracklist and those clips come from.
   const homeSrc = cell?.album.src === "deezer" ? "deezer" : "apple";
-  const [audioSrc, setAudioSrc] = useState<"apple" | "deezer">(homeSrc);
+  const [audioSrc, setAudioSrc] = useState<AudioSrc>(homeSrc);
+  const [clipSrc, setClipSrc] = useState<"apple" | "deezer">(homeSrc);
+  const full = audioSrc === "youtube" || audioSrc === "bandcamp";
+  const chooseSrc = (s: AudioSrc) => { setAudioSrc(s); if (s === "apple" || s === "deezer") setClipSrc(s); };
   const loadedFor = useRef("");
   useEffect(() => {
     if (!cell) return;
     setNote(cell.note ?? ""); setGenre(cell.genre ?? ""); setFff(cell.fff ?? ""); setSuggestedGenre(undefined); setSuggestedFff(undefined);
-    setAudioSrc(cell.track ? (cell.track.src === "deezer" ? "deezer" : "apple") : homeSrc);
+    const t = cell.track;
+    const clip = t?.src === "deezer" ? "deezer" : t?.preview ? "apple" : homeSrc;
+    setClipSrc(clip);
+    setAudioSrc(t?.player ?? clip);
+    setYt({ status: "idle" }); setYtPaste(""); setBc({ status: "idle" }); setBcPaste(""); bcFor.current = "";
     const artist = cell.album.artist;
     getRelatedArtists({ data: { artist } }).then((a) => { if (a.length) setSuggestedFff(a.join(", ")); }).catch(() => {});
     fetchAlbum(cell.album).then((d) => setSuggestedGenre(d.genre)).catch(() => {});
@@ -539,8 +559,9 @@ function SongPicker({ idx, cell, onClose, onPick, onRemove, isNew, player }: {
     loadedFor.current = `${idx}:${cell.album.id}`;
     const want = (sameAlbum ? chosen?.name : undefined) ?? cell.track?.name;
     setChosen(null);
-    (audioSrc === homeSrc ? Promise.resolve<Pick<Album, "id" | "src"> | null>(cell.album) : findAlbumOn(audioSrc, cell.album))
-      .then((a) => (a ? fetchAlbum(a).then((d) => d.tracks.filter((t) => t.preview)) : []))
+    (clipSrc === homeSrc ? Promise.resolve<Pick<Album, "id" | "src"> | null>(cell.album) : findAlbumOn(clipSrc, cell.album))
+      // Full-song sources list every track; preview sources only the ones with a clip.
+      .then((a) => (a ? fetchAlbum(a).then((d) => (full ? d.tracks : d.tracks.filter((t) => t.preview))) : []))
       .then((list) => {
         if (cancelled) return;
         setTracks(list);
@@ -549,11 +570,68 @@ function SongPicker({ idx, cell, onClose, onPick, onRemove, isNew, player }: {
       .catch(() => { if (!cancelled) setTracks([]); });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [idx, cell?.album.id, audioSrc]);
+  }, [idx, cell?.album.id, clipSrc, full]);
+
+  // YouTube: the chosen song's video, found automatically (or pasted when the match is wrong).
+  const [yt, setYt] = useState<{ status: "idle" | "loading" | "found" | "none" | "unavailable"; id?: string }>({ status: "idle" });
+  const [ytPaste, setYtPaste] = useState("");
+  useEffect(() => {
+    if (audioSrc !== "youtube" || !cell || !chosen) return;
+    const saved = cell.track;
+    if (saved?.yt && normTitle(saved.name) === normTitle(chosen.name)) { setYt({ status: "found", id: saved.yt }); return; }
+    let cancelled = false;
+    setYt({ status: "loading" });
+    findYouTubeVideo({ data: { artist: cell.album.artist, song: chosen.name } })
+      .then((m) => { if (!cancelled) setYt(m.status === "found" ? { status: "found", id: m.id } : { status: m.status }); })
+      .catch(() => { if (!cancelled) setYt({ status: "unavailable" }); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [audioSrc, chosen?.name, cell?.album.id]);
+  const pastedYt = ytPaste ? youTubeId(ytPaste) : null;
+  const ytId = pastedYt ?? (yt.status === "found" ? yt.id : undefined);
+
+  // Bandcamp: the album found by artist and title (or a pasted album/track link); the chosen song is matched by name.
+  const [bc, setBc] = useState<{ status: "idle" | "loading" | "found" | "none"; release?: BandcampRelease }>({ status: "idle" });
+  const [bcPaste, setBcPaste] = useState("");
+  const bcFor = useRef(""); // album the Bandcamp lookup ran for (once per opening)
+  useEffect(() => {
+    if (audioSrc !== "bandcamp" || !cell) return;
+    const key = `${idx}:${cell.album.id}`;
+    if (bcFor.current === key) return;
+    bcFor.current = key;
+    let cancelled = false;
+    setBc({ status: "loading" });
+    const saved = cell.track?.bc?.url;
+    (saved ? getBandcampRelease({ data: { url: saved } }) : findBandcampAlbum({ data: { artist: cell.album.artist, album: cell.album.name } }))
+      .then((r) => { if (!cancelled) setBc(r ? { status: "found", release: r } : { status: "none" }); })
+      .catch(() => { if (!cancelled) setBc({ status: "none" }); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [audioSrc, idx, cell?.album.id]);
+  const usePastedBandcamp = async () => {
+    if (!bcPaste.trim()) return;
+    setBc({ status: "loading" });
+    const r = await getBandcampRelease({ data: { url: bcPaste.trim() } }).catch(() => null);
+    setBc(r ? { status: "found", release: r } : { status: "none" });
+  };
+  const release = bc.release;
+  const bcTrack = release ? (release.track ?? (chosen ? release.tracks.find((t) => normTitle(t.title) === normTitle(chosen.name))?.id : undefined)) : undefined;
+  const bcRef = release ? { url: release.url, album: release.album, track: bcTrack } : undefined;
+
+  const pickedTrack = (): Track | undefined => {
+    if (!chosen) return undefined;
+    const base: Track = { id: chosen.id, name: chosen.name, preview: chosen.preview, start: 0, ...(chosen.src ? { src: chosen.src } : {}) };
+    // Keep a YouTube match already found for this song (lookups are rationed).
+    const saved = cell?.track;
+    if (saved?.yt !== undefined && normTitle(saved.name) === normTitle(chosen.name)) base.yt = saved.yt;
+    if (audioSrc === "youtube" && ytId) return { ...base, player: "youtube", yt: ytId };
+    if (audioSrc === "bandcamp" && bcRef) return { ...base, player: "bandcamp", bc: bcRef };
+    return base;
+  };
   return (
     <Dialog open={idx !== null && !!cell} onOpenChange={(o) => !o && onClose()}>
       {/* On phones, sit a little high so the host's corner badge never covers the buttons. */}
-      <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto max-sm:top-[calc(50%-1.75rem)] max-sm:max-h-[calc(100dvh-8rem)]">
+      <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto md:max-w-xl lg:max-w-2xl max-sm:top-[calc(50%-1.75rem)] max-sm:max-h-[calc(100dvh-8rem)]">
         {cell && (
           <>
             <DialogHeader>
@@ -567,22 +645,22 @@ function SongPicker({ idx, cell, onClose, onPick, onRemove, isNew, player }: {
             </DialogHeader>
             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
               <span>Audio from</span>
-              <div role="radiogroup" aria-label="Audio source" className="flex gap-1">
-                {(["apple", "deezer"] as const).map((s) => (
-                  <button key={s} role="radio" aria-checked={audioSrc === s} onClick={() => setAudioSrc(s)}
-                    className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 ${audioSrc === s ? "border-primary bg-primary text-primary-foreground" : "border-border hover:bg-muted hover:text-foreground"}`}>
-                    <BrandIcon name={s === "deezer" ? "Deezer" : "Apple Music"} className="h-3 w-3" />{s === "deezer" ? "Deezer" : "Apple Music"}
+              <div role="radiogroup" aria-label="Audio source" className="flex flex-wrap gap-1">
+                {AUDIO_SOURCES.map((o) => (
+                  <button key={o.id} role="radio" aria-checked={audioSrc === o.id} onClick={() => chooseSrc(o.id)} title={o.hint}
+                    className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 ${audioSrc === o.id ? "border-primary bg-primary text-primary-foreground" : "border-border hover:bg-muted hover:text-foreground"}`}>
+                    <BrandIcon name={o.label} className="h-3 w-3" />{o.label}
                   </button>
                 ))}
               </div>
             </div>
-            <ul className="max-h-72 space-y-1 overflow-y-auto">
+            <ul className="max-h-72 space-y-1 overflow-y-auto lg:max-h-96">
               {tracks === null && <li className="text-sm text-muted-foreground">Loading songs…</li>}
               {tracks?.length === 0 && (
                 <li className="text-sm text-muted-foreground">
-                  {audioSrc === homeSrc ? "No previews available for this album." : `Couldn't find this album with previews on ${audioSrc === "deezer" ? "Deezer" : "Apple Music"}.`}{" "}
-                  <button onClick={() => setAudioSrc(audioSrc === "apple" ? "deezer" : "apple")} className="underline underline-offset-2 hover:text-foreground">
-                    Try {audioSrc === "apple" ? "Deezer" : "Apple Music"}
+                  {clipSrc === homeSrc ? (full ? "Couldn't load this album's songs." : "No previews available for this album.") : `Couldn't find this album${full ? "" : " with previews"} on ${clipSrc === "deezer" ? "Deezer" : "Apple Music"}.`}{" "}
+                  <button onClick={() => (full ? setClipSrc(clipSrc === "apple" ? "deezer" : "apple") : chooseSrc(clipSrc === "apple" ? "deezer" : "apple"))} className="underline underline-offset-2 hover:text-foreground">
+                    Try {clipSrc === "apple" ? "Deezer" : "Apple Music"}
                   </button>
                 </li>
               )}
@@ -591,12 +669,50 @@ function SongPicker({ idx, cell, onClose, onPick, onRemove, isNew, player }: {
                   className={`flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-sm ${chosen?.id === t.id ? "bg-accent" : "hover:bg-muted"}`}>
                   <span className="w-5 text-muted-foreground">{n + 1}</span>
                   <span className="flex-1 truncate">{t.name}</span>
-                  <button onClick={(e) => { e.stopPropagation(); play(`pick-${t.id}`, t); }} className="rounded-full p-1.5 hover:text-primary" aria-label={`Play ${t.name}`}>
+                  <button disabled={!t.preview} onClick={(e) => { e.stopPropagation(); play(`pick-${t.id}`, t); }} className="rounded-full p-1.5 hover:text-primary disabled:opacity-30" aria-label={`Play ${t.name}`}>
                     {playing === `pick-${t.id}` ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
                   </button>
                 </li>
               ))}
             </ul>
+            {audioSrc === "youtube" && (
+              <div className="space-y-2 rounded-lg border border-border p-3 text-sm">
+                {!chosen ? <p className="text-muted-foreground">Pick a song above to find it on YouTube.</p>
+                  : ytId ? <FullSongPlayer track={{ id: chosen.id, name: chosen.name, start: 0, player: "youtube", yt: ytId }} colors={PICKER_COLORS} />
+                  : <p className="text-muted-foreground">{yt.status === "loading" ? "Finding it on YouTube…" : yt.status === "none" ? "Couldn't find this song on YouTube." : yt.status === "unavailable" ? "YouTube search is busy right now. Paste a link instead." : ""}</p>}
+                <input value={ytPaste} onChange={(e) => setYtPaste(e.target.value)} placeholder={ytId && !pastedYt ? "Wrong video? Paste a YouTube link" : "Paste a YouTube link"}
+                  className={`w-full rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring ${ytPaste && !pastedYt ? "border-destructive" : "border-input"}`} />
+                <p className="text-xs text-muted-foreground">Visitors get the whole song in a YouTube player when they open this album.</p>
+              </div>
+            )}
+            {audioSrc === "bandcamp" && (
+              <div className="space-y-2 rounded-lg border border-border p-3 text-sm">
+                {bc.status === "loading" && <p className="text-muted-foreground">Looking on Bandcamp…</p>}
+                {bc.status === "found" && release && bcRef && (
+                  <>
+                    <p className="text-xs text-muted-foreground">
+                      <a href={release.url} target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-foreground">{release.artist} — {release.title}</a>
+                      {chosen && !bcTrack && " · couldn't match the song, so it plays the release from the start"}
+                    </p>
+                    <FullSongPlayer track={{ id: chosen?.id ?? 0, name: chosen?.name ?? release.title, start: 0, player: "bandcamp", bc: bcRef }} colors={PICKER_COLORS} />
+                  </>
+                )}
+                {bc.status === "none" && bcPaste.trim() && <p className="text-destructive">Couldn't read that link. Paste a bandcamp.com album or track page.</p>}
+                {bc.status === "none" && !bcPaste.trim() && (
+                  <p className="text-muted-foreground">
+                    Couldn't find it on Bandcamp.{" "}
+                    <a href={`https://bandcamp.com/search?q=${encodeURIComponent(`${cell.album.artist} ${cell.album.name}`)}`} target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-foreground">Search Bandcamp</a>{" "}
+                    and paste the album or track link.
+                  </p>
+                )}
+                <div className="flex gap-2">
+                  <input value={bcPaste} onChange={(e) => setBcPaste(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") usePastedBandcamp(); }}
+                    placeholder={bc.status === "found" ? "Different release? Paste a Bandcamp link" : "https://artist.bandcamp.com/album/…"}
+                    className="min-w-0 flex-1 rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" />
+                  <button onClick={usePastedBandcamp} disabled={!bcPaste.trim()} className="rounded-lg border border-border px-3 py-2 text-sm hover:bg-muted disabled:opacity-50">Use</button>
+                </div>
+              </div>
+            )}
             <div className="space-y-3 border-t border-border pt-4">
               <label className="block text-sm">
                 <span className="text-xs uppercase tracking-widest text-muted-foreground">Description <span className="normal-case tracking-normal">(optional)</span></span>
@@ -616,7 +732,7 @@ function SongPicker({ idx, cell, onClose, onPick, onRemove, isNew, player }: {
                 </label>
               </div>
               <div className="sticky -bottom-6 -mx-6 space-y-2 border-t border-border bg-background px-6 pb-6 pt-3">
-              <button onClick={() => onPick(chosen ? { id: chosen.id, name: chosen.name, preview: chosen.preview, start: 0, ...(chosen.src ? { src: chosen.src } : {}) } : undefined, { note: note.trim(), genre: genre.trim(), fff: splitFff(fff).join(", ") })}
+              <button onClick={() => onPick(pickedTrack(), { note: note.trim(), genre: genre.trim(), fff: splitFff(fff).join(", ") })}
                 className="w-full rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">{isNew ? "Add to chart" : "Save"}</button>
               {!isNew && (
                 <button onClick={onRemove}

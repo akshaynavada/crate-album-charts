@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import type { Cell } from "@/lib/chart-types";
 import { albumLinks, fetchAlbum, splitFff, type AlbumDetails } from "@/lib/itunes";
 import { canPlay, type usePlayer } from "@/lib/use-player";
+import { FullSongPlayer, hasFullPlayer } from "@/components/FullSongPlayer";
 import { useCrateTheme } from "@/components/ThemeScope";
 import { BrandIcon } from "@/components/BrandIcon";
 
@@ -95,8 +96,8 @@ export function AlbumModal({ cell, index, onClose, player, position, onPrev, onN
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       {/* Desktop: square art on the left sized to the dialog height, details scroll on the right. */}
       {/* Dialogs portal out of the themed wrapper, so re-apply the crate theme here. */}
-      <DialogContent {...theme.attrs} onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd} onTouchCancel={() => { touch.current = null; setDragX(0); }} style={{ ...theme.style, ["--h" as string]: "min(86vh, 600px, 52vw)" }}
-        className="font-sans text-foreground max-h-[92vh] max-sm:top-[calc(50%-1.75rem)] max-sm:max-h-[calc(100dvh-8rem)] max-w-[calc(var(--h)+400px)] gap-0 overflow-y-auto p-0 md:overflow-hidden [&>button:last-child]:rounded-full [&>button:last-child]:bg-background/70 [&>button:last-child]:p-1.5">
+      <DialogContent {...theme.attrs} onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd} onTouchCancel={() => { touch.current = null; setDragX(0); }} style={{ ...theme.style, ["--h" as string]: "min(86vh, 780px, 56vw)" }}
+        className="font-sans text-foreground max-h-[92vh] max-sm:top-[calc(50%-1.75rem)] max-sm:max-h-[calc(100dvh-8rem)] max-w-[calc(var(--h)+400px)] lg:max-w-[calc(var(--h)+460px)] gap-0 overflow-y-auto p-0 md:overflow-hidden [&>button:last-child]:rounded-full [&>button:last-child]:bg-background/70 [&>button:last-child]:p-1.5">
         <div key={cell.album.id + ":" + index}
           className={`grid touch-pan-y md:h-[var(--h)] md:grid-cols-[var(--h)_minmax(0,1fr)] ${dragX ? "" : "transition-transform duration-200"} ${enterFrom === "right" ? "animate-in fade-in slide-in-from-right-12 duration-200" : enterFrom === "left" ? "animate-in fade-in slide-in-from-left-12 duration-200" : ""} ${showHint ? "crate-swipe-nudge" : ""}`}
           style={dragX ? { transform: `translateX(${dragX}px)`, opacity: Math.max(0.4, 1 - Math.abs(dragX) / 500) } : undefined}>
@@ -176,7 +177,16 @@ export function AlbumModal({ cell, index, onClose, player, position, onPrev, onN
               </div>
             )}
 
-            {hooked && canPlay(hooked) && (
+            {hooked && hasFullPlayer(hooked) && (
+              <div>
+                <h3 className="mb-2 flex items-baseline justify-between gap-2 text-xs uppercase tracking-widest text-muted-foreground">
+                  The pick<span className="truncate normal-case tracking-normal text-foreground">{hooked.name}</span>
+                </h3>
+                <FullSongPlayer track={hooked} colors={{ bg: theme.palette.surface, link: theme.palette.accent }} autoplay />
+              </div>
+            )}
+
+            {hooked && !hasFullPlayer(hooked) && canPlay(hooked) && (
               <button onClick={() => player.play(keyFor(hooked.id), hooked)}
                 className="flex items-center gap-3 rounded-lg bg-accent px-3 py-2.5 text-left text-sm hover:bg-accent/80">
                 {player.playing === keyFor(hooked.id) ? <Pause className="h-5 w-5 shrink-0" /> : <Play className="h-5 w-5 shrink-0" />}

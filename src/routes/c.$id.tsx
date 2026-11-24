@@ -11,6 +11,7 @@ import { parseTheme, resolveTheme } from "@/lib/theme";
 import { ThemeScope } from "@/components/ThemeScope";
 import { RankList } from "@/components/RankList";
 import { ListenBar } from "@/components/ListenBar";
+import { hasFullPlayer } from "@/components/FullSongPlayer";
 import { useBackToClose } from "@/lib/use-back-to-close";
 
 const chartQuery = (id: string) =>
@@ -102,6 +103,8 @@ function SharedChart() {
     if (!c) return;
     setOpen(i);
     const t = c.track;
+    // Picks with a full-song player (YouTube / Bandcamp) play in the window instead of the preview clip.
+    if (hasFullPlayer(t)) { player.stop(); return; }
     if (t && canPlay(t) && player.playing !== cellKey(i)) {
       const ok = await player.play(cellKey(i), t, { toggle: false });
       if (!ok) setSoundBlocked(true);
