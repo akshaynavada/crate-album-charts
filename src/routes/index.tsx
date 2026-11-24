@@ -1,13 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Cloud, CloudCheck, CloudOff, Plus, Search, Play, Pause, Disc3, Share2, Check, SlidersHorizontal, Pencil, Trash2 } from "lucide-react";
+import { Cloud, CloudCheck, CloudOff, Plus, Search, Play, Pause, Disc3, Share2, Check, SlidersHorizontal, Pencil, Trash2, Image as ImageIcon } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { usePlayer } from "@/lib/use-player";
-import { fetchAlbum, splitFff, type AlbumTrack } from "@/lib/itunes";
+import { fetchAlbum, findAlbumOn, normTitle, splitFff, type AlbumTrack } from "@/lib/itunes";
 import { getRelatedArtists, searchDeezerAlbums } from "@/lib/deezer.functions";
 import { refreshPreviews } from "@/lib/deezer-previews";
 import { findYouTubeVideo } from "@/lib/youtube.functions";
 import { ListenBar } from "@/components/ListenBar";
+import { ChartImageDialog } from "@/components/ChartImageDialog";
 import { useBackToClose } from "@/lib/use-back-to-close";
 
 export const Route = createFileRoute("/")({
@@ -63,6 +64,7 @@ function Index() {
   const [showNames, setShowNames] = useState(true);
   const [loaded, setLoaded] = useState(false);
   const [shareInfo, setShareInfo] = useState<{ id: string; token: string } | null>(null);
+  const [imageOpen, setImageOpen] = useState(false);
   const [q, setQ] = useState("");
   const [results, setResults] = useState<Album[]>([]);
   const [searching, setSearching] = useState(false);
@@ -360,7 +362,7 @@ function Index() {
                 className="w-full rounded-lg border border-input bg-background py-2.5 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-ring" />
             </div>
             <div role="radiogroup" aria-label="Search in" className="mt-2 flex items-center gap-1 text-xs">
-              <span className="mr-1 text-muted-foreground">Audio Source</span>
+              <span className="mr-1 text-muted-foreground">Search on</span>
               {SEARCH_OPTIONS.map((o) => (
                 <button key={o.id} role="radio" aria-checked={searchIn === o.id} onClick={() => chooseSearchIn(o.id)} title={o.hint}
                   className={`rounded-full border px-2.5 py-0.5 ${searchIn === o.id ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"}`}>
@@ -397,14 +399,14 @@ function Index() {
 
         <ThemeScope as="section" theme={resolved} className="overflow-hidden rounded-3xl border border-border p-4 shadow-record md:p-6">
           {/* Phones: buttons on their own row so the title (and renaming it) gets the full width. */}
-          <div className="mb-6 flex flex-col-reverse gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+          <div className="mb-6 flex flex-col-reverse gap-3 lg:flex-row lg:items-start lg:justify-between lg:gap-4">
             <div className="min-w-0 flex-1">
               <EditableTitle value={title} onChange={setTitle} />
               {resolved.tagline && <p className="mt-3 text-sm text-muted-foreground">{resolved.tagline}</p>}
             </div>
-            <div className="flex shrink-0 items-center justify-end gap-2">
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5 sm:gap-2">
               <button onClick={() => setCustomizing(true)} aria-label="Customize layout & theme" title="Title, layout, album list and theme"
-                className="flex items-center gap-2 rounded-full border border-border bg-card/70 px-3 py-2 text-sm hover:bg-muted">
+                className="flex items-center gap-2 rounded-full border border-border bg-card/70 px-2.5 py-2 text-sm hover:bg-muted sm:px-3">
                 <SlidersHorizontal className="h-4 w-4" /><span className="hidden sm:inline">Customize layout & theme</span><span className="sm:hidden">Customize</span>
               </button>
               {/* Save status; opens the private link for continuing on another device. */}
@@ -412,10 +414,16 @@ function Index() {
                 <button onClick={() => (shareInfo ? setEditLinkOpen(true) : saveFailed ? retrySave() : undefined)} disabled={!shareInfo && !saveFailed}
                   title={shareInfo ? "Saved automatically. Click to continue on another device." : saveFailed ? "Couldn't save online. Click to try again." : "Saving…"}
                   className="flex items-center gap-1.5 rounded-full border border-border bg-card/70 px-3 py-2 text-sm hover:bg-muted disabled:opacity-60">
-                  {shareInfo ? <><CloudCheck className="h-4 w-4" />Saved</> : saveFailed ? <><CloudOff className="h-4 w-4" />Retry save</> : <><Cloud className="h-4 w-4 animate-pulse" />Saving…</>}
+                  {shareInfo ? <><CloudCheck className="h-4 w-4" /><span className="max-sm:sr-only">Saved</span></> : saveFailed ? <><CloudOff className="h-4 w-4" />Retry save</> : <><Cloud className="h-4 w-4 animate-pulse" />Saving…</>}
                 </button>
               )}
-              <button onClick={share} className="flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
+              {hasAlbum && (
+                <button onClick={() => setImageOpen(true)} aria-label="Share image" title="Make an image of this chart to post anywhere"
+                  className="flex items-center gap-2 rounded-full border border-border bg-card/70 px-3 py-2 text-sm hover:bg-muted">
+                  <ImageIcon className="h-4 w-4" /><span className="hidden sm:inline">Share image</span>
+                </button>
+              )}
+              <button onClick={share} className="flex items-center gap-2 rounded-full bg-primary px-3 py-2 sm:px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90">
                 {copied ? <Check className="h-4 w-4" /> : <Share2 className="h-4 w-4" />}{copied ? "Link copied" : "Share"}
               </button>
             </div>
@@ -473,7 +481,9 @@ function Index() {
                 onPlay={(i) => { const t = cells[i]?.track; if (t) play(`cell-${i}`, t); }} isPlaying={(i) => playing === `cell-${i}`} />
             )}
           </div>
-          <ListenBar cells={cells.slice(0, total)} title={title} showList={showNames} link={shareInfo ? `/c/${shareInfo.id}` : undefined} />
+          <ListenBar cells={cells.slice(0, total)} title={title} imageButton={false} />
+          <ChartImageDialog open={imageOpen} onOpenChange={setImageOpen} cells={cells.slice(0, total)} title={title.trim()} theme={resolved}
+            showList={showNames} link={shareInfo ? `/c/${shareInfo.id}` : undefined} />
         </ThemeScope>
       </main>
 
@@ -507,18 +517,39 @@ function SongPicker({ idx, cell, onClose, onPick, onRemove, isNew, player }: {
   const [fff, setFff] = useState("");
   const [suggestedGenre, setSuggestedGenre] = useState<string | undefined>();
   const [suggestedFff, setSuggestedFff] = useState<string | undefined>();
+  // Where the previews come from. Starts as the saved pick's source (or the album's catalog); the creator can
+  // switch to the other catalog when a preview is missing or sounds wrong.
+  const homeSrc = cell?.album.src === "deezer" ? "deezer" : "apple";
+  const [audioSrc, setAudioSrc] = useState<"apple" | "deezer">(homeSrc);
+  const loadedFor = useRef("");
   useEffect(() => {
     if (!cell) return;
-    setTracks(null); setChosen(null); setNote(cell.note ?? ""); setGenre(cell.genre ?? ""); setFff(cell.fff ?? ""); setSuggestedGenre(undefined); setSuggestedFff(undefined);
+    setNote(cell.note ?? ""); setGenre(cell.genre ?? ""); setFff(cell.fff ?? ""); setSuggestedGenre(undefined); setSuggestedFff(undefined);
+    setAudioSrc(cell.track ? (cell.track.src === "deezer" ? "deezer" : "apple") : homeSrc);
     const artist = cell.album.artist;
     getRelatedArtists({ data: { artist } }).then((a) => { if (a.length) setSuggestedFff(a.join(", ")); }).catch(() => {});
-    fetchAlbum(cell.album).then((d) => {
-      const list = d.tracks.filter((t) => t.preview);
-      setTracks(list);
-      setSuggestedGenre(d.genre);
-      setChosen(list.find((t) => t.id === cell.track?.id) ?? null);
-    }).catch(() => setTracks([]));
+    fetchAlbum(cell.album).then((d) => setSuggestedGenre(d.genre)).catch(() => {});
   }, [idx, cell?.album.id]);
+  useEffect(() => {
+    if (!cell) return;
+    let cancelled = false;
+    setTracks(null);
+    // Switching source keeps the same song selected; opening another album starts from its saved pick.
+    const sameAlbum = loadedFor.current === `${idx}:${cell.album.id}`;
+    loadedFor.current = `${idx}:${cell.album.id}`;
+    const want = (sameAlbum ? chosen?.name : undefined) ?? cell.track?.name;
+    setChosen(null);
+    (audioSrc === homeSrc ? Promise.resolve<Pick<Album, "id" | "src"> | null>(cell.album) : findAlbumOn(audioSrc, cell.album))
+      .then((a) => (a ? fetchAlbum(a).then((d) => d.tracks.filter((t) => t.preview)) : []))
+      .then((list) => {
+        if (cancelled) return;
+        setTracks(list);
+        setChosen(list.find((t) => t.id === cell.track?.id) ?? (want ? list.find((t) => normTitle(t.name) === normTitle(want)) : undefined) ?? null);
+      })
+      .catch(() => { if (!cancelled) setTracks([]); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idx, cell?.album.id, audioSrc]);
   return (
     <Dialog open={idx !== null && !!cell} onOpenChange={(o) => !o && onClose()}>
       {/* On phones, sit a little high so the host's corner badge never covers the buttons. */}
@@ -531,16 +562,30 @@ function SongPicker({ idx, cell, onClose, onPick, onRemove, isNew, player }: {
                 <div>
                   <DialogTitle className="font-display text-2xl font-normal">{cell.album.name}</DialogTitle>
                   <p className="text-sm text-muted-foreground">{cell.album.artist} · hook a song to this album</p>
-                  <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
-                    <BrandIcon name={cell.album.src === "deezer" ? "Deezer" : "Apple Music"} className="h-3 w-3" />
-                    Tracks and previews from {cell.album.src === "deezer" ? "Deezer" : "Apple Music"}
-                  </p>
                 </div>
               </div>
             </DialogHeader>
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              <span>Audio from</span>
+              <div role="radiogroup" aria-label="Audio source" className="flex gap-1">
+                {(["apple", "deezer"] as const).map((s) => (
+                  <button key={s} role="radio" aria-checked={audioSrc === s} onClick={() => setAudioSrc(s)}
+                    className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 ${audioSrc === s ? "border-primary bg-primary text-primary-foreground" : "border-border hover:bg-muted hover:text-foreground"}`}>
+                    <BrandIcon name={s === "deezer" ? "Deezer" : "Apple Music"} className="h-3 w-3" />{s === "deezer" ? "Deezer" : "Apple Music"}
+                  </button>
+                ))}
+              </div>
+            </div>
             <ul className="max-h-72 space-y-1 overflow-y-auto">
               {tracks === null && <li className="text-sm text-muted-foreground">Loading songs…</li>}
-              {tracks?.length === 0 && <li className="text-sm text-muted-foreground">No previews available for this album.</li>}
+              {tracks?.length === 0 && (
+                <li className="text-sm text-muted-foreground">
+                  {audioSrc === homeSrc ? "No previews available for this album." : `Couldn't find this album with previews on ${audioSrc === "deezer" ? "Deezer" : "Apple Music"}.`}{" "}
+                  <button onClick={() => setAudioSrc(audioSrc === "apple" ? "deezer" : "apple")} className="underline underline-offset-2 hover:text-foreground">
+                    Try {audioSrc === "apple" ? "Deezer" : "Apple Music"}
+                  </button>
+                </li>
+              )}
               {tracks?.map((t, n) => (
                 <li key={t.id} onClick={() => setChosen(t)}
                   className={`flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-sm ${chosen?.id === t.id ? "bg-accent" : "hover:bg-muted"}`}>

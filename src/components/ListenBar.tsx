@@ -13,12 +13,16 @@ const YT_MAX = 50;
  * copies the tracklist as "Artist - Song" lines for playlist converters like TuneMyMusic, and makes
  * a shareable image of the chart.
  */
-export function ListenBar({ cells, title, showList = true, link }: { cells: Cell[]; title?: string; showList?: boolean; link?: string | undefined }) {
+export function ListenBar({ cells, title, showList = true, link, imageButton = true }: {
+  cells: Cell[]; title?: string; showList?: boolean; link?: string | undefined;
+  /** The editor has its own "Share image" button next to Share. */
+  imageButton?: boolean;
+}) {
   const theme = useCrateTheme();
   const [copied, setCopied] = useState(false);
   const [imageOpen, setImageOpen] = useState(false);
-  if (!cells.some(Boolean)) return null;
   const picks = cells.flatMap((c) => (c?.track ? [{ artist: c.album.artist, song: c.track.name, yt: c.track.yt }] : []));
+  if (!cells.some(Boolean) || (!imageButton && !picks.length)) return null;
   const ids = picks.flatMap((p) => (p.yt ? [p.yt] : [])).slice(0, YT_MAX);
   const ytUrl = `https://www.youtube.com/watch_videos?video_ids=${ids.join(",")}`;
 
@@ -41,7 +45,7 @@ export function ListenBar({ cells, title, showList = true, link }: { cells: Cell
         </p>
       </div>
       <div className="flex flex-wrap gap-2 sm:shrink-0 sm:flex-nowrap">
-        <button onClick={() => setImageOpen(true)} className={pill}><ImageIcon className="h-4 w-4" />Image</button>
+        {imageButton && <button onClick={() => setImageOpen(true)} className={pill}><ImageIcon className="h-4 w-4" />Image</button>}
         {ids.length > 0 && (
           <a href={ytUrl} target="_blank" rel="noreferrer"
             title={ids.length < picks.length ? `${ids.length} of ${picks.length} songs found on YouTube` : "Opens as a temporary YouTube playlist"}
@@ -55,7 +59,7 @@ export function ListenBar({ cells, title, showList = true, link }: { cells: Cell
           </button>
         )}
       </div>
-      <ChartImageDialog open={imageOpen} onOpenChange={setImageOpen} cells={cells} title={title?.trim() ?? ""} theme={theme} showList={showList} link={link} />
+      {imageButton && <ChartImageDialog open={imageOpen} onOpenChange={setImageOpen} cells={cells} title={title?.trim() ?? ""} theme={theme} showList={showList} link={link} />}
     </div>
   );
 }
