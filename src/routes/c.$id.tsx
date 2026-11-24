@@ -132,11 +132,13 @@ function SharedChart() {
         {theme.tagline && <p className="mb-2 text-base text-foreground/80 md:text-lg">{theme.tagline}</p>}
         {/* Mouse-only: phones never play on hover. */}
         <div className="mt-6 hidden justify-end [@media(hover:hover)]:flex">
-          <button role="switch" aria-checked={hoverOn} onClick={() => setHover(!hoverOn)}
-            className="flex items-center gap-2 rounded-full border border-border bg-card/60 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground">
-            {hoverOn ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}Play on hover
-            <span className={`relative h-4 w-7 rounded-full transition ${hoverOn ? "bg-primary" : "bg-muted-foreground/40"}`}>
-              <span className={`absolute top-0.5 h-3 w-3 rounded-full bg-background transition-all ${hoverOn ? "left-3.5" : "left-0.5"}`} />
+          <button role="switch" aria-checked={hoverOn} aria-label="Play songs when hovering over albums" onClick={() => setHover(!hoverOn)}
+            title={hoverOn ? "Songs play when you hover over an album. Click to turn off." : "Turn on to hear songs when you hover over an album."}
+            className="flex items-center gap-2.5 rounded-full border border-border bg-card/70 px-4 py-2 text-sm font-medium text-foreground hover:bg-muted">
+            {hoverOn ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5 text-muted-foreground" />}
+            <span className="min-w-[4.5rem] text-left">Audio {hoverOn ? "On" : "Off"}</span>
+            <span className={`relative h-5 w-9 rounded-full transition ${hoverOn ? "bg-primary" : "bg-muted-foreground/40"}`}>
+              <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-background shadow transition-all ${hoverOn ? "left-[1.125rem]" : "left-0.5"}`} />
             </span>
           </button>
         </div>
